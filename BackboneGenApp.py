@@ -23,7 +23,7 @@ class BackboneGenApp:
         self.figure = None
         # Root component
         self.root = tk.Tk()
-        self.root.title("Topology Generator")
+        self.root.title("Backbone Topology Generator")
         self.root.geometry('800x800')
         # Value that holds if the single clusters should be removed
         self.remove_single_clusters = tk.BooleanVar(self.root)
