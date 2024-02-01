@@ -7,7 +7,7 @@ from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from KeyValueList import KeyValueList
 from ValueList import ValueList
-from generator import write_backbone, find_groups, metro_core_split
+from generator import write_backbone, find_groups, metro_core_split, ring_structure_tel
 import pandas as pd
 from network import format_distance_limits
 import networkconstants as nc
@@ -26,12 +26,14 @@ class MetroGenApp:
         if initial_refs is None:
             initial_refs = []
 
+        self.national_ref_nodes = None
         self.cluster_list = ["-"]
         self.nodes_clusters = {}
         # Variable to hold the default figure
         self.figure = None
         # Root component
         self.root = tk.Tk()
+        self.root.geometry("800x800")
         self.root.title("Metro Core Topology Generator")
         # Value that holds if the single clusters should be removed
         self.remove_single_clusters = tk.BooleanVar(self.root)
@@ -50,9 +52,12 @@ class MetroGenApp:
         # variable for the upper limits of the distances.
         self.upper_limits = upper_limits
 
+        # Variable to hold the value of the checkbox to select ring instead of mesh
+        self.ring_var = tk.BooleanVar(self.root)
+
         # Generate the backbone network using the predefined parameters.
         # Retrieve the generated topology, a list with distance per edge,
-        # the list of type per node, the name of the node and link sheets at the excel file
+        # the list of type per node, the name of the node and link sheets at the Excel file
         # the position of the nodes and the assigned colors
         '''self.topo, self.distances, self.assigned_types, \
             self.node_sheet, self.link_sheet, self.pos, self.colors = backbone(degrees, weights, nodes,
@@ -63,7 +68,7 @@ class MetroGenApp:
         types["number"] = total.astype(int)
 
         self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
-            metro_core_split(None, degrees, weights, self.upper_limits, types, dict_colors)
+            metro_core_split(None, degrees, weights, self.upper_limits, types, dict_colors, algo="kamada")
         # Variable to hold the assigned clusters
         self.clusters = None
         self.radio_val = tk.StringVar(value="0")
@@ -78,7 +83,7 @@ class MetroGenApp:
         tab1, degree_list, type_list = self.create_tab_list(notebook, "Degrees", "Weights", "Number of nodes",
                                                             "params", "Types", "Weights", degrees, weights, types,
                                                             nodes)
-        notebook.add(tab1, text="Degree constraints")
+        notebook.add(tab1, text="Metro mesh constraints")
 
         # The second tab permits selection between set of nodes or reading from file.
         tab2 = self.create_tab_source(notebook)
@@ -119,7 +124,7 @@ class MetroGenApp:
                                                  filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
         if file_path:
             write_backbone(file_path, self.topo, self.distances, self.assigned_types, self.figure,
-                           clusters=self.clusters, pos=self.pos)
+                           clusters=self.clusters, pos=self.pos, reference_nodes=self.national_ref_nodes)
 
     def create_tab_save(self, parent):
         frame = ttk.Frame(parent)
@@ -162,10 +167,38 @@ class MetroGenApp:
         combo = ttk.Combobox(subframe_f, name="cluster", state="readonly",
                              values=["-"])
         combo.current(0)
+        combo.bind("<<ComboboxSelected>>", self.cluster_selected)
         combo.grid(row=5, columnspan=5)
+
+        ring_check = tk.Checkbutton(subframe_f, text='Generate ring structure (omit mesh constraints)',
+                                    variable=self.ring_var, onvalue=1, offvalue=0, state="disabled",
+                                    name="ring_check")
+        ring_check.grid(row=6, column=0)
+        ring_size_label = tk.Label(subframe_f, text="number of rings")
+        ring_size_label.grid(row=7, columnspan=5)
+        ring_combo = ttk.Combobox(subframe_f, name="ring_size", state="disabled",
+                                  values=["1", "2", "3", "4", "6"])
+        ring_combo.grid(row=8, columnspan=5)
         # run_button = tk.Button(frame, text="Load from File", command=self.load_from_file)
 
         return frame
+
+    # Action to be run whenever a cluster is selected to generate a topology
+    def cluster_selected(self, event):
+        selected_cluster_from_file = self.root.nametowidget("notebook_gen.source_frame.from_file.cluster")
+        selected_cluster = selected_cluster_from_file.get()
+        nodes_in_cluster = self.nodes_clusters[int(selected_cluster)]
+        ring_select_check = self.root.nametowidget("notebook_gen.source_frame.from_file.ring_check")
+        ring_combo = self.root.nametowidget("notebook_gen.source_frame.from_file.ring_size")
+        if len(nodes_in_cluster) == 2:
+            ring_select_check["state"] = "normal"
+            ring_combo["state"] = "normal"
+            if ring_combo.get() == "":
+                ring_combo.set(1)
+        else:
+            ring_select_check["state"] = "disabled"
+            ring_combo["state"] = "disabled"
+            self.ring_var.set(False)
 
     def create_tab_image(self, parent):
         frame = ttk.Frame(parent, name="image_frame")
@@ -188,7 +221,8 @@ class MetroGenApp:
 
         # Add the Tkinter canvas to the window
         # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
         # print(self.colors)
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
@@ -235,7 +269,7 @@ class MetroGenApp:
         label_algo = tk.Label(frame, text="Algorithm")
         combo = ttk.Combobox(frame, name="algo", state="readonly",
                              values=["spectral", "kamada", "spring", "spiral", "shell"])
-        combo.current(0)
+        combo.current(1)
         label_algo.grid(row=(18 + initial_row), column=0, pady=5)
         combo.grid(row=(18 + initial_row), column=1, pady=5)
 
@@ -273,66 +307,68 @@ class MetroGenApp:
     def rerun_metro(self, frame, degree_list: KeyValueList, node_number,
                     type_list: KeyValueList, algorithm):
         old_canvas = None
-        # Types and percentages for the nodes
-        type_key_vals = type_list.get_entries()
-        # Build the expected data structure
-        types = pd.DataFrame({'code': [key for key, value in type_key_vals],
-                              'proportion': [float(value) for key, value in type_key_vals]})
-
-        total_proportion = sum(types.proportion)
-        total = np.rint(int(node_number.get()) * types.proportion / total_proportion)
-        types["number"] = total.astype(int)
-
-        # Retrieve information about source of nodes (input or file)
-        node_ref_number = self.node_refs
-        selected_cluster_from_file = self.root.nametowidget("notebook_gen.source_frame.from_file.cluster")
-        selected_cluster = selected_cluster_from_file.get()
-        if selected_cluster != "-":
-            node_ref_number = self.nodes_clusters[int(selected_cluster)]
-        print(node_ref_number)
-
-        #if self.radio_val.get() == "1"
-        #    node_ref_number
-
-        if nc.NATIONAL_CO_CODE in list(types['code']):
-            # types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(self.node_refs)
-            types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(node_ref_number)
-        else:
-            '''row = {'code': nc.NATIONAL_CO_CODE, 'proportion': len(self.node_refs) / int(node_number.get()),
-                   'number': len(self.node_refs)}'''
-            row = {'code': nc.NATIONAL_CO_CODE, 'proportion': len(node_ref_number) / int(node_number.get()),
-                   'number': len(node_ref_number)}
-            types = pd.concat([types, pd.DataFrame([row])], ignore_index=True)
-        print(len(node_ref_number))
-        print(types)
-
         # Find the old canvas for the image and destroy it
         for i in frame.winfo_children():
             if isinstance(i, tk.Canvas):
                 old_canvas = i
                 break
         old_canvas.destroy()
+        # Retrieve information about source of nodes (input or file)
+        node_ref_number = self.node_refs
+        selected_cluster_from_file = self.root.nametowidget("notebook_gen.source_frame.from_file.cluster")
+        selected_cluster = selected_cluster_from_file.get()
 
-        # Prepare the data of degrees and weights as expected by the metro_core function
-        key_values = degree_list.get_entries()
-        degrees = [int(key) for key, value in key_values]
-        weights = [int(value) for key, value in key_values]
+        if selected_cluster != "-" and self.radio_val.get() == "1":
+            node_ref_number = self.nodes_clusters[int(selected_cluster)]
+            if self.ring_var.get():
+                ring_size = self.root.nametowidget("notebook_gen.source_frame.from_file.ring_size")
+                (self.topo, self.distances, self.assigned_types, self.pos, self.colors,
+                 self.national_ref_nodes) = \
+                    ring_structure_tel(int(ring_size.get()), node_ref_number[0], node_ref_number[1],
+                                       prefix="R" + selected_cluster + "-")
+        # print(node_ref_number)
 
-        # Try to recover the number of nodes or use 50 as default
-        nodes = 50
-        try:
-            nodes = int(node_number.get())
-        except ValueError:
-            print("Error in number of nodes, using default: ", nodes)
+        if self.radio_val.get() == "0" or not self.ring_var.get():
+            # Types and percentages for the nodes
+            type_key_vals = type_list.get_entries()
+            # Build the expected data structure
+            types = pd.DataFrame({'code': [key for key, value in type_key_vals],
+                                  'proportion': [float(value) for key, value in type_key_vals]})
 
-        if self.radio_val.get() == "0":
-            print("Retrieving nodes: ", self.node_refs)
+            total_proportion = sum(types.proportion)
+            total = np.rint(int(node_number.get()) * types.proportion / total_proportion)
+            types["number"] = total.astype(int)
 
-        # Call the metro function with the expected parameters
-        self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
-            metro_core_split(None, degrees, weights, self.upper_limits, types, self.color_codes,
-                             algorithm, node_ref_number)
+            # if self.radio_val.get() == "1"
+            #    node_ref_number
 
+            if nc.NATIONAL_CO_CODE in list(types['code']):
+                # types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(self.node_refs)
+                types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(node_ref_number)
+            else:
+                '''row = {'code': nc.NATIONAL_CO_CODE, 'proportion': len(self.node_refs) / int(node_number.get()),
+                       'number': len(self.node_refs)}'''
+                row = {'code': nc.NATIONAL_CO_CODE, 'proportion': len(node_ref_number) / int(node_number.get()),
+                       'number': len(node_ref_number)}
+                types = pd.concat([types, pd.DataFrame([row])], ignore_index=True)
+
+            # Prepare the data of degrees and weights as expected by the metro_core function
+            key_values = degree_list.get_entries()
+            degrees = [int(key) for key, value in key_values]
+            weights = [int(value) for key, value in key_values]
+
+            # Try to recover the number of nodes or use 50 as default
+            nodes = 50
+            try:
+                nodes = int(node_number.get())
+            except ValueError:
+                print("Error in number of nodes, using default: ", nodes)
+
+            # Call the metro function with the expected parameters
+            self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
+                metro_core_split(None, degrees, weights, self.upper_limits, types, self.color_codes,
+                                 algorithm, node_ref_number)
+            self.national_ref_nodes = ["" for i in self.topo.nodes]
         # Get x and y coordinates for all the elements
         x_pos = [pos[0] for pos in list(self.pos.values())]
         y_pos = [pos[1] for pos in list(self.pos.values())]
@@ -340,11 +376,20 @@ class MetroGenApp:
         x_size = max(x_pos) - min(x_pos)
         y_size = max(y_pos) - min(y_pos)
 
-        # y_size will be kept always as 10 while x_size is resized to keep proportions
-        x_size = x_size * 10 / y_size
-        y_size = 10
+        if x_size>y_size:
+            y_size = y_size * 12 / x_size
+            x_size = 12
+        else:
+            x_size = x_size * 12 / y_size
+            y_size = 12
 
-        size_ratio = x_size / self.fig_width
+
+        # y_size will always be kept as 10 while x_size is resized to keep proportions
+        # if not self.ring_var.get():
+        # x_size = x_size * 10 / y_size
+        # y_size = 10
+
+        # size_ratio = x_size / self.fig_width
         # Change the figure width based on this and prepare the canvas and widgets
         self.fig_width = x_size
         self.figure = plt.Figure(figsize=(x_size, y_size),
@@ -355,7 +400,9 @@ class MetroGenApp:
 
         # canvas_widget.config(width=x_size, height=y_size)
         # Add the Tkinter canvas to the window
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N )
+
         # Draw the figure
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
@@ -365,10 +412,10 @@ class MetroGenApp:
         # Call to the creation of the grouping/cluster graph with existing values
         # self.group_graph()
         # Resize the whole window as the graph width changed
-        root_y = self.root.winfo_height()  # round(y_size*60)+output_label.winfo_height()
-        root_x = self.root.winfo_width() * size_ratio
-        print(root_x, ";", root_y)
-        self.root.geometry(f'{round(root_x)}x{round(root_y)}')
+        #root_y = self.root.winfo_height()  # round(y_size*60)+output_label.winfo_height()
+        #root_x = self.root.winfo_width() * size_ratio
+        #print(root_x, ";", root_y)
+        #self.root.geometry(f'{round(root_x)}x{round(root_y)}')
 
     # Regenerate the group graph
     def group_graph(self):
@@ -414,7 +461,7 @@ class MetroGenApp:
             if isinstance(i, tk.Canvas):
                 old_canvas = i
                 break
-        # Detroy the canvas
+        # Destroy the canvas
         old_canvas.destroy()
 
     def enable_nodes(self):
@@ -439,14 +486,13 @@ class MetroGenApp:
         nodes_df = None
         clusters = []
         if file_path:
-            print(file_path)
             nodes_df = pd.read_excel(file_path, sheet_name="nodes")
             # links_df = pd.read_excel(file_path, sheet_name="links")
             try:
                 clusters = nodes_df['Macro region']
             except KeyError:
                 print("No clusters found")
-            print("Number of clusters: ", len(set(clusters)))
+            # print("Number of clusters: ", len(set(clusters)))
             label = self.root.nametowidget("notebook_gen.source_frame.from_file.cluster_list")
             label['text'] = self.clusters_as_list_of_nodes(nodes_df['node_name'], clusters)
         return nodes_df

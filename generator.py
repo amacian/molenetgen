@@ -1,4 +1,3 @@
-import math
 import random
 import numpy as np
 from scipy import spatial
@@ -60,7 +59,7 @@ def backbone(degrees, weights, nodes, upper_limits, types, algo="spectral", dict
     # Generate positions of the nodes based on the spectral distribution
     pos = None
 
-    print(algo)
+    # print(algo)
     match algo:
         case "kamada":
             pos = nx.kamada_kawai_layout(topo)
@@ -90,7 +89,7 @@ def backbone(degrees, weights, nodes, upper_limits, types, algo="spectral", dict
     corrected_max_upper = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
     # modify distances from the ones in the graph to the actual expected scale
     distances = calculate_edge_distances(topo, pos, corrected_max_upper)
-    print("Count distance per range:", count_distance_ranges(distances, upper_limits))
+    # print("Count distance per range:", count_distance_ranges(distances, upper_limits))
 
     # Generate a sequence of colors for each node depending on the type
     colors = color_nodes(assigned_types, dict_colors)
@@ -101,13 +100,14 @@ def backbone(degrees, weights, nodes, upper_limits, types, algo="spectral", dict
 
 
 def write_backbone(filename, topo, distances, assigned_types, figure, node_sheet="nodes", link_sheet="links",
-                   clusters=None, pos=None):
+                   clusters=None, pos=None, reference_nodes=None):
     figure.savefig(filename + ".png")
-    x_coord = [0]*len(topo.nodes)
-    y_coord = [0]*len(topo.nodes)
-    if pos != None:
+    x_coord = [0] * len(topo.nodes)
+    y_coord = [0] * len(topo.nodes)
+    if pos is not None:
         x_coord, y_coord = zip(*pos.values())
-    write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet, clusters, x_coord, y_coord)
+    write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet, clusters, x_coord,
+                      y_coord, reference_nodes)
 
 
 # Generate a region of a Metro Core Network
@@ -166,7 +166,7 @@ def metro_core_split(filename, degrees, weights, upper_limits, types, dict_color
     topo = nx.relabel_nodes(topo, dict(zip(topo.nodes, name_nodes)))
 
     # Generate positions of the nodes based on the spectral/spring distribution
-    print(algo)
+    # print(algo)
     match algo:
         case "kamada":
             pos = nx.kamada_kawai_layout(topo)
@@ -185,7 +185,7 @@ def metro_core_split(filename, degrees, weights, upper_limits, types, dict_color
     # plt.show()
     if filename is not None:
         plt.savefig(filename + ".png")
-         # Reinitialize the figure for future use
+        # Reinitialize the figure for future use
         # plt.figure().clear()
 
     # Define the upper bound for the distances. Could be the maximum limit
@@ -194,13 +194,14 @@ def metro_core_split(filename, degrees, weights, upper_limits, types, dict_color
     # Scale the distances from the topology to the defined values
     distances = calculate_edge_distances(topo, pos, corrected_max_upper)
     # Check the generate percentages for each range
-    print(count_distance_ranges(distances, upper_limits))
+    # print(count_distance_ranges(distances, upper_limits))
 
     # Write Excel file
     if filename is not None:
         write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet)
 
     return topo, distances, assigned_types, pos, colors
+
 
 # Generate the subtopologies for the metro topology
 def sub_metro(degrees, weights, nodes, types, subnet_number):
@@ -216,7 +217,7 @@ def sub_metro(degrees, weights, nodes, types, subnet_number):
             # Finish only if the degrees of all nodes are >= minimum accepted degree
             break
         # Otherwise, repeat the node generation
-        # print("Nodes with less links than lower edge threshold")
+        # print("Nodes with fewer links than lower edge threshold")
 
     # Assign types to nodes
     assigned_types = metro_assign_types(pd.DataFrame({'code': types.code,
@@ -315,7 +316,7 @@ def metro_aggregation_horseshoe(filename, initial_rco_name,
     horseshoe.add_edge(dummy_node, final_rco_name)
     # Set distance 1 for both edges between Dummy and the ends
     nx.set_edge_attributes(horseshoe, dict(zip(nx.edges(horseshoe, [dummy_node]), [1, 1])), 'weight')
-    print(nx.get_edge_attributes(horseshoe, 'weight'))
+    # print(nx.get_edge_attributes(horseshoe, 'weight'))
 
     # Generate all the shortest paths between any node and the Dummy one
     results = nx.shortest_path(horseshoe, source=dummy_node, weight='weight')
@@ -334,7 +335,7 @@ def metro_aggregation_horseshoe(filename, initial_rco_name,
 # initial index for the regional nodes
 # Variability the actual length of the links will be between avg_length [+- var * avg_length]
 def ring_structure_tel(n_rings, end_1, end_2, prefix='R',
-                       initial_index=1, variability=0.1):
+                       initial_index=1, variability=0.1, filename=None):
     # Definition of parameters for each type of ring structure, the lengths of each subrings
     # number of offices per subring, length ranges and max length without amplifier.
     ring_config = pd.DataFrame({"r_numbers": [1, 2, 3, 4, 6],
@@ -355,15 +356,15 @@ def ring_structure_tel(n_rings, end_1, end_2, prefix='R',
                                 "dist_amplifiers": [70, 70, 60, 60, 55]
                                 })
     # Actual creation of rings
-    create_ring_network_tel(n_rings, ring_config, end_1, end_2,
-                            prefix, initial_index, variability)
+    return create_ring_network_tel(n_rings, ring_config, end_1, end_2,
+                                   prefix, initial_index, variability, filename)
 
 
 # Function to create Telefonica ring Metro-regional networks
 # n_rings number of rings in the structure (1, 2, 3, 4 or 6)
 # ring_config DataFrame structure formed by number of rings
 def create_ring_network_tel(n_rings, ring_config, end_1, end_2,
-                            prefix, initial_index, variability):
+                            prefix, initial_index, variability, filename=None):
     # Generation of an empty graph
     ring = nx.Graph()
     # Retrieving the information related to the ring structure for the number of rings
@@ -420,7 +421,7 @@ def create_ring_network_tel(n_rings, ring_config, end_1, end_2,
         office_names.insert(0, end_1)
         office_names.append(end_2)
         # Printing to screen
-        print_ring_to_screen(link_lengths, office_names)
+        # print_ring_to_screen(link_lengths, office_names)
         # Create a graph for the subring using the names for the nodes and the
         # link_lengths as an attribute for weight
         sub_ring = create_graph_rings(office_names, link_lengths)
@@ -438,10 +439,12 @@ def create_ring_network_tel(n_rings, ring_config, end_1, end_2,
     color_map = ['y' if node == end_1 or node == end_2 else 'c' for node in ring.nodes]
     # print(nx.to_numpy_array(ring))
     nx.draw(ring, pos=pos_loc, with_labels=True, font_weight='bold', node_color=color_map)
-    plt.savefig("test_ring_Telefonica.png")
+
+    if filename is not None:
+        plt.savefig(filename)
     # Reinitialize the figure for future use
     # plt.show()
-    plt.figure().clear()
+    # plt.figure().clear()
     # Types will be NCO for the ends and RCO for the rest of the nodes
     # TODO pass it as an argument
     types = [nc.NATIONAL_CO_CODE if node == end_1 or node == end_2 else nc.REGIONAL_CO_CODE for node in ring.nodes]
@@ -459,13 +462,15 @@ def create_ring_network_tel(n_rings, ring_config, end_1, end_2,
     results = nx.shortest_path(ring, source=dummy_node, weight='weight')
     # Locate the reference node
     reference_node = [results[i][1] for i in ring.nodes if i != dummy_node]
+
     # Remove the dummy node (and the edges automatically)
     ring.remove_node('Dummy')
     # Write Excel file
+    if filename is not None:
+        write_network_xls_plus("test_ring_Telefonica.xlsx", ring, distances, types,
+                               "nodes", "links", reference_node)
 
-    write_network_xls_plus("test_ring_Telefonica.xlsx", ring, distances, types,
-                           "nodes", "links", reference_node)
-
+    return ring, distances, types, pos_loc, color_map, reference_node
     '''new_ring = generate_adjacency_matrix(ring)
     new_ring = nx.relabel_nodes(new_ring, dict(zip(new_ring.nodes, ring.nodes)))
     nx.draw(new_ring, with_labels=True, font_weight='bold', node_color=color_map)'''
@@ -561,7 +566,7 @@ def find_groups(topo, types, pos, eps=0.1, avoid_single=True):
     nodes_pending = [element for element, type_e in zip(nodes, types) if type_e not in types_excluded]
     # Define the coordinates as lists of x, y for each node
     coord = [[pos[0], pos[1]] for pos, type_e in zip(list(pos.values()), types) if type_e not in types_excluded]
-    # Apply the DBSCAN clustering algorithm with euclidean metric
+    # Apply the DBSCAN clustering algorithm with Euclidean metric
     db = DBSCAN(eps, min_samples=1, algorithm='auto', metric='euclidean').fit(coord)
 
     # Retrieve the assigned labels
@@ -624,7 +629,7 @@ def merge_individual_clusters(nodes, pos, cluster_dict, cluster_labels, types, e
         # Get the coordinates of the node
         coord_single = coord[pos_node]
         # And create a list with the coordinates of the rest of the nodes
-        rest_coord = coord[:pos_node] + coord[pos_node+1:]
+        rest_coord = coord[:pos_node] + coord[pos_node + 1:]
         # Create a KDTree with the rest of coordinates
         tree = spatial.KDTree(rest_coord)
         # And find the one closest to the single node
@@ -632,11 +637,11 @@ def merge_individual_clusters(nodes, pos, cluster_dict, cluster_labels, types, e
         # res[1] holds the index in rest_coord. If the index is >=pos_node
         # we must increment 1 to account for the single node when looking into
         # the rest of lists
-        pos_other = int(res[1] if res[1]<pos_node else res[1]+1)
+        pos_other = int(res[1] if res[1] < pos_node else res[1] + 1)
         # Retrieve the cluster label of the nearest node and reassign the single node to that cluster
         cluster_labels[pos_node] = cluster_labels[pos_other]
         # Update that position of the cluster dictionary adding the single node
-        cluster_dict[cluster_labels[pos_node]]=np.append(cluster_dict[cluster_labels[pos_node]], nodes[pos_node])
+        cluster_dict[cluster_labels[pos_node]] = np.append(cluster_dict[cluster_labels[pos_node]], nodes[pos_node])
         # And remove it from its old position
         cluster_dict[cluster_one_positions[old_cluster]] = np.array([])
     # Return the updated list of labels
