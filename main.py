@@ -42,7 +42,7 @@ if __name__ == '__main__':
         nc.REGIONAL_NONHUB_CO_CODE: 'y',
         nc.LOCAL_CO_CODE: 'o'
     }
-    # app = BackboneGenApp(degrees, weights, nodes, upper_limits, types, dict_colors)
+    app = BackboneGenApp(degrees, weights, nodes, upper_limits, types, dict_colors)
     #backbone(filename, degrees, weights, nodes, upper_limits, types)
 
 
@@ -54,7 +54,7 @@ if __name__ == '__main__':
                                    nc.REGIONAL_NONHUB_CO_CODE],
                           'proportion': [1, 5, 66, 23]})
 
-    app = MetroGenApp(degrees, weights, nodes, upper_limits, types, dict_colors, initial_refs)
+    # app = MetroGenApp(degrees, weights, nodes, upper_limits, types, dict_colors, initial_refs)
 
     ''' #  ** METRO CORE  ** #
     # Filename for the Metro network

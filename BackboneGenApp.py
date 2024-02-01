@@ -24,6 +24,7 @@ class BackboneGenApp:
         # Root component
         self.root = tk.Tk()
         self.root.title("Topology Generator")
+        self.root.geometry('800x800')
         # Value that holds if the single clusters should be removed
         self.remove_single_clusters = tk.BooleanVar(self.root)
         # Color codes depending on the type
@@ -126,7 +127,7 @@ class BackboneGenApp:
 
         # Add the Tkinter canvas to the window
         # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N )
         # print(self.colors)
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
@@ -248,10 +249,14 @@ class BackboneGenApp:
         y_size = max(y_pos) - min(y_pos)
 
         # y_size will be kept always as 10 while x_size is resized to keep proportions
-        x_size = x_size * 10 / y_size
-        y_size = 10
+        if x_size > y_size:
+            y_size = y_size * 12 / x_size
+            x_size = 12
+        else:
+            x_size = x_size * 12 / y_size
+            y_size = 12
 
-        size_ratio = x_size / self.fig_width
+        # size_ratio = x_size / self.fig_width
         # Change the figure width based on this and prepare the canvas and widgets
         self.fig_width = x_size
         self.figure = plt.Figure(figsize=(x_size, y_size),
@@ -262,7 +267,7 @@ class BackboneGenApp:
 
         # canvas_widget.config(width=x_size, height=y_size)
         # Add the Tkinter canvas to the window
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
+        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N )
         # Draw the figure
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
@@ -272,10 +277,10 @@ class BackboneGenApp:
         # Call to the creation of the grouping/cluster graph with existing values
         self.group_graph()
         # Resize the whole window as the graph width changed
-        root_y = self.root.winfo_height()  # round(y_size*60)+output_label.winfo_height()
-        root_x = self.root.winfo_width() * size_ratio
-        print(root_x, ";", root_y)
-        self.root.geometry(f'{round(root_x)}x{round(root_y)}')
+        # root_y = self.root.winfo_height()  # round(y_size*60)+output_label.winfo_height()
+        # root_x = self.root.winfo_width() * size_ratio
+        # print(root_x, ";", root_y)
+        # self.root.geometry(f'{round(root_x)}x{round(root_y)}')
 
     # Regenerate the group graph
     def group_graph(self):
