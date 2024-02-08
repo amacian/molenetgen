@@ -91,7 +91,7 @@ def rename_nodes_idx(assigned_types, indexes, special_rename_type=None, explicit
 def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, macro_region=None, x_coord=None,
                       y_coord=None, reference_nodes=None):
     if macro_region is None:
-        macro_region = [1] * len(graph.nodes)
+        macro_region = [0] * len(graph.nodes)
     if x_coord is None:
         x_coord = [0] * len(graph.nodes)
     if y_coord is None:

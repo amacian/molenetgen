@@ -226,23 +226,30 @@ def sub_metro(degrees, weights, nodes, types, subnet_number):
     return topo, assigned_types
 
 
+def format_node_list(nodes):
+    result = ""
+    process = 0
+    for i in nodes:
+        if process != 0:
+            result = result + ","
+        process = process+1
+        result = result + i
+        if process == 10:
+            result = result + "\n"
+            process = 1
+    return result
+
+
 # Generate the Metro aggregation Horseshoes
-def metro_aggregation_horseshoe(filename, initial_rco_name,
+def metro_aggregation_horseshoe(initial_rco_name,
                                 initial_lco_idx, final_rco_name,
                                 hops, length_ranges,
-                                perc_horse_length, prefix=nc.LOCAL_CO_CODE):
-    # Assign colors to the different types
-    dict_colors = {
-        nc.REGIONAL_CO_CODE: 'r',
-        prefix: 'b'
-    }
-
+                                perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={},
+                                filename=None):
     # Sheet names in the Excel file for nodes and links
     node_sheet = "Nodes"
     link_sheet = "Links"
 
-    # Actual filename
-    filename = str(time.time()) + "_" + filename
     # The number of local offices is 1 element less than number of hops
     n_local_offices = hops - 1
     # select one of the ranges from the distances based on the weight defined by percentage
@@ -302,8 +309,9 @@ def metro_aggregation_horseshoe(filename, initial_rco_name,
     nx.draw_networkx_edge_labels(horseshoe, edge_labels=dict(zip(horseshoe.edges, distances)),
                                  pos={key: np.array([value, 0]) for key, value in zip(horseshoe.nodes, positions)})
     # And save the file
-    plt.savefig(filename + ".png")
-    plt.figure().clear()
+    if filename is not None:
+        plt.savefig(filename + ".png")
+    # plt.figure().clear()
 
     # Add the distances as an edge attribute for the nodes
     nx.set_edge_attributes(horseshoe, dict(zip(horseshoe.edges, distances)), 'weight')
@@ -324,11 +332,13 @@ def metro_aggregation_horseshoe(filename, initial_rco_name,
     # Remove the dummy node (and the edges automatically)
     horseshoe.remove_node('Dummy')
     # Write Excel file
-    write_network_xls_plus(filename, horseshoe, distances, types, node_sheet,
-                           link_sheet, reference_node)
+    if filename is not None:
+        write_network_xls_plus(filename, horseshoe, distances, types, node_sheet,
+                               link_sheet, reference_node)
+    pos = {key: np.array([value, 0]) for key, value in zip(horseshoe.nodes, positions)}
+    return horseshoe, distances, types, pos, colors, reference_node
 
-
-# Function to define the parameters for the Telefonica ring Metro-regional networks
+# Function to define the parameters for the ring Metro-regional networks
 # n_rings number of rings in the structure (1, 2, 3, 4 or 6)
 # end_1 and end_2 name of both ends of the ring.
 # prefix to prepend to the regional nodes
@@ -360,7 +370,7 @@ def ring_structure_tel(n_rings, end_1, end_2, prefix='R',
                                    prefix, initial_index, variability, filename)
 
 
-# Function to create Telefonica ring Metro-regional networks
+# Function to create ring Metro-regional networks
 # n_rings number of rings in the structure (1, 2, 3, 4 or 6)
 # ring_config DataFrame structure formed by number of rings
 def create_ring_network_tel(n_rings, ring_config, end_1, end_2,
@@ -471,9 +481,6 @@ def create_ring_network_tel(n_rings, ring_config, end_1, end_2,
                                "nodes", "links", reference_node)
 
     return ring, distances, types, pos_loc, color_map, reference_node
-    '''new_ring = generate_adjacency_matrix(ring)
-    new_ring = nx.relabel_nodes(new_ring, dict(zip(new_ring.nodes, ring.nodes)))
-    nx.draw(new_ring, with_labels=True, font_weight='bold', node_color=color_map)'''
 
 
 # Method to place amplifiers in between nodes when the length is over the max allowed length
@@ -523,21 +530,6 @@ def print_ring_to_screen(link_lengths, office_names):
         print(str(link_lengths[i]) + " ---", end="")
     print("[" + office_names[-1] + "]")
     return
-
-
-'''def generate_adjacency_matrix(graph):
-    dimension = len(graph.nodes)
-    nodes = [n for n in graph.nodes]
-    adjacency_matrix = numpy.zeros([dimension,dimension])
-    weight_attrs = nx.get_edge_attributes(graph, 'weight')
-    for key, val in weight_attrs.items():
-        idx1 = nodes.index(key[0])
-        idx2 = nodes.index(key[1])
-        adjacency_matrix[idx1, idx2] = val
-        adjacency_matrix[idx2, idx1] = val
-    print (adjacency_matrix)
-    new_graph = nx.from_numpy_array(adjacency_matrix)
-    return new_graph'''
 
 
 def create_graph_rings(office_names, link_lengths):

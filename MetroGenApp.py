@@ -92,11 +92,6 @@ class MetroGenApp:
         tab3, canvas = self.create_tab_image(notebook)
         notebook.add(tab3, text="Graph")
 
-        # The third tab corresponds to the creation of the clusters
-        # and the image representing them
-        # tab3 = self.create_tab_grouping(notebook, "group_tab")
-        # notebook.add(tab3, text="Grouping")
-
         # The fourth tab is the one used to save all the information into an Excel file
         tab4 = self.create_tab_save(notebook)
         notebook.add(tab4, text="Save")
@@ -275,29 +270,6 @@ class MetroGenApp:
 
         return frame, degree_list, type_list
 
-    def create_tab_grouping(self, parent, frame_name):
-        frame = ttk.Frame(parent, name=frame_name)
-        combo = ttk.Combobox(frame, name="max_group", state="readonly",
-                             values=["0.05", "0.055", "0.06", "0.065", "0.07", "0.075",
-                                     "0.08", "0.085", "0.09", "0.095", "0.1", "0.11",
-                                     "0.12", "0.125", "0.13", "0.14", "0.15"])
-        combo.current(0)
-        combo.grid(row=0, column=0, pady=5)
-        check = ttk.Checkbutton(frame, name="avoid_single", variable=self.remove_single_clusters)
-        check.grid(row=0, column=1, pady=5)
-        group_button = tk.Button(frame, text="Search for groups", command=self.group_graph)
-        group_button.grid(row=0, column=2, pady=5)
-        label_groups = tk.Label(frame,
-                                text="",
-                                name="print_groups", anchor="w")
-        # label_printable.pack(side=tk.BOTTOM)
-        label_groups.grid(row=1, column=0, columnspan=2, sticky=tk.S)
-
-        canvas = FigureCanvasTkAgg(self.figure, master=frame)
-        self.group_graph()
-
-        return frame
-
     # Create a new graph with the same parameters
     # Frame - a reference to the frame where the graph is drawn
     # degree_list - A key value list with the link degree proportion
@@ -376,18 +348,12 @@ class MetroGenApp:
         x_size = max(x_pos) - min(x_pos)
         y_size = max(y_pos) - min(y_pos)
 
-        if x_size>y_size:
+        if x_size > y_size:
             y_size = y_size * 12 / x_size
             x_size = 12
         else:
             x_size = x_size * 12 / y_size
             y_size = 12
-
-
-        # y_size will always be kept as 10 while x_size is resized to keep proportions
-        # if not self.ring_var.get():
-        # x_size = x_size * 10 / y_size
-        # y_size = 10
 
         # size_ratio = x_size / self.fig_width
         # Change the figure width based on this and prepare the canvas and widgets
@@ -401,7 +367,7 @@ class MetroGenApp:
         # canvas_widget.config(width=x_size, height=y_size)
         # Add the Tkinter canvas to the window
         # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N )
+        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
 
         # Draw the figure
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
@@ -409,47 +375,6 @@ class MetroGenApp:
         # Retrieve the reference to the label where distance ranges and proportions are drawn
         output_label = frame.nametowidget("print_distances")
         output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
-        # Call to the creation of the grouping/cluster graph with existing values
-        # self.group_graph()
-        # Resize the whole window as the graph width changed
-        #root_y = self.root.winfo_height()  # round(y_size*60)+output_label.winfo_height()
-        #root_x = self.root.winfo_width() * size_ratio
-        #print(root_x, ";", root_y)
-        #self.root.geometry(f'{round(root_x)}x{round(root_y)}')
-
-    # Regenerate the group graph
-    def group_graph(self):
-        # Find the combo that defines the eps
-        combo = self.root.nametowidget("notebook_gen.group_tab.max_group")
-        # Call the function that generates the tab
-        groups, self.clusters = find_groups(self.topo, self.assigned_types, self.pos,
-                                            eps=float(combo.get()), avoid_single=self.remove_single_clusters.get())
-        # Retrieve a reference to the frame and to the label included in that frame
-        frame = self.root.nametowidget("notebook_gen.group_tab")
-        label = self.root.nametowidget("notebook_gen.group_tab.print_groups")
-        # Remove the old figure with clusters from the canvas
-        self.remove_old_group_figure_canvas()
-        # And create a new one
-        self.figure = plt.Figure(figsize=(self.fig_width, self.fig_height),
-                                 tight_layout=True, dpi=50)
-        # Prepare an exist to plot it and the related canvas
-        ax = self.figure.add_subplot(111)
-        canvas = FigureCanvasTkAgg(self.figure, master=frame)
-        canvas_widget = canvas.get_tk_widget()
-
-        # canvas_widget.config(width=x_size, height=y_size)
-        # Add the Tkinter canvas to the window
-        canvas_widget.grid(row=2, column=0, columnspan=3, sticky=tk.W + tk.E + tk.N + tk.S)
-        # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        # Define the color map that will be used to represent the clusters
-        color_map = plt.cm.rainbow
-        norm = matplotlib.colors.Normalize(vmin=1, vmax=max(self.clusters))
-        # Draw the result
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=color_map(norm(self.clusters)), ax=ax)
-
-        # We might want to include some description in the future
-        label['text'] = ""  # format_groups(groups)
 
     # find and remove the group_tab figure canvas
     def remove_old_group_figure_canvas(self):
@@ -506,8 +431,13 @@ class MetroGenApp:
         for name in names_clusters:
             idx_for_cluster = [pos for pos, value in enumerate(clusters) if value == name]
             text += "Cluster " + str(name) + "["
+            newline = 10
             for idx in idx_for_cluster:
+                if newline == 1:
+                    text += "\n"
+                    newline == 10
                 text += names[idx] + " "
+                newline -=1
             text += "]\n"
             node_names = [names[idx] for idx in idx_for_cluster]
             self.nodes_clusters[name] = node_names
