@@ -7,10 +7,11 @@ from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from KeyValueList import KeyValueList
 from ValueList import ValueList
-from generator import write_backbone, metro_core_split, ring_structure_tel
+from generator import write_network, metro_core_split, ring_structure_tel
 import pandas as pd
 from network import format_distance_limits
 import networkconstants as nc
+import Texts_EN as texts
 
 
 # Class for the Tkinter Topology Generator Application
@@ -115,11 +116,19 @@ class MetroGenApp:
 
     # Save the information to file
     def save_to_file(self):
+        result = False
+        message = texts.FILE_NOT_FOUND
         file_path = filedialog.asksaveasfilename(defaultextension=".xlsx",
                                                  filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
         if file_path:
-            write_backbone(file_path, self.topo, self.distances, self.assigned_types, self.figure,
-                           clusters=self.clusters, pos=self.pos, reference_nodes=self.national_ref_nodes)
+            result, message = write_network(file_path, self.topo, self.distances, self.assigned_types, self.figure,
+                                            clusters=self.clusters, pos=self.pos,
+                                            reference_nodes=self.national_ref_nodes,
+                                            type_nw=nc.METRO_CORE)
+        if not result:
+            tk.messagebox.showerror('', message)
+        else:
+            tk.messagebox.showinfo('', texts.COMPLETED)
 
     def create_tab_save(self, parent):
         frame = ttk.Frame(parent)
@@ -336,10 +345,13 @@ class MetroGenApp:
             except ValueError:
                 print("Error in number of nodes, using default: ", nodes)
 
+            add_prefix = ""
+            if selected_cluster != "-":
+                add_prefix = "_" + selected_cluster + "_"
             # Call the metro function with the expected parameters
             self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
                 metro_core_split(None, degrees, weights, self.upper_limits, types, self.color_codes,
-                                 algorithm, node_ref_number)
+                                 algorithm, node_ref_number, add_prefix)
             self.national_ref_nodes = ["" for i in self.topo.nodes]
         # Get x and y coordinates for all the elements
         x_pos = [pos[0] for pos in list(self.pos.values())]
@@ -414,7 +426,7 @@ class MetroGenApp:
             nodes_df = pd.read_excel(file_path, sheet_name="nodes")
             # links_df = pd.read_excel(file_path, sheet_name="links")
             try:
-                clusters = nodes_df['Macro region']
+                clusters = nodes_df[nc.XLS_CLUSTER]
             except KeyError:
                 print("No clusters found")
             # print("Number of clusters: ", len(set(clusters)))
@@ -429,6 +441,8 @@ class MetroGenApp:
         self.nodes_clusters = {}
         text = "Defined clusters:\n"
         for name in names_clusters:
+            if name == 0:
+                continue
             idx_for_cluster = [pos for pos, value in enumerate(clusters) if value == name]
             text += "Cluster " + str(name) + "["
             newline = 10
@@ -437,7 +451,7 @@ class MetroGenApp:
                     text += "\n"
                     newline == 10
                 text += names[idx] + " "
-                newline -=1
+                newline -= 1
             text += "]\n"
             node_names = [names[idx] for idx in idx_for_cluster]
             self.nodes_clusters[name] = node_names

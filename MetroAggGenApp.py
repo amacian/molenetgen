@@ -7,7 +7,7 @@ from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import networkconstants
-from generator import write_backbone, format_node_list, \
+from generator import write_network, format_node_list, \
     metro_aggregation_horseshoe
 import pandas as pd
 
@@ -88,8 +88,8 @@ class MetroAggGenApp:
         file_path = filedialog.asksaveasfilename(defaultextension=".xlsx",
                                                  filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
         if file_path:
-            write_backbone(file_path, self.topo, self.distances, self.assigned_types, self.figure,
-                           pos=self.pos, reference_nodes=self.national_ref_nodes)
+            write_network(file_path, self.topo, self.distances, self.assigned_types, self.figure,
+                          pos=self.pos, reference_nodes=self.national_ref_nodes)
 
     def create_tab_save(self, parent):
         frame = ttk.Frame(parent)

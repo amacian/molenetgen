@@ -15,102 +15,20 @@ import pandas as pd
 types_excluded = [nc.TRANSIT_CODE]
 
 
-# Filename for the Backbone network
-# degrees: A list with the possible node degrees
-# weights: The frequency % of the node degrees in the total number of COs
-# nodes: Total number of COs
-# upper_limits: upper length limits for each range
-# types: available types of nodes and % per type
-def backbone(degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}):
-    # Sheet names in the Excel file for nodes and links
-    node_sheet = "Nodes"
-    link_sheet = "Links"
-
-    # Repeat
-    while True:
-        # Call the function to generate the topology
-        topo = gen_topology(degrees, weights, nodes)
-        # Calculate the actual degrees for each node
-        dist_degrees = [val for (node, val) in topo.degree()]
-        # Topology generation removes parallel links and self-loops, so
-        # it is possible that the number of degrees of some nodes is
-        # smaller than the smallest allowed degree.
-        if min(dist_degrees) >= degrees[0]:
-            # Finish only if the degrees of all nodes are >= minimum accepted degree
-            break
-        # Otherwise, repeat the node generation
-        print("Nodes with less links than lower edge threshold")
-
-    # Compare expected degree weights and actual frequencies
-    print("Expected degree frequency:", weights)
-    print("Actual degree frequency:", count_degree_freqs(dist_degrees))
-    # Represent the topology
-    # print(topo.edges)
-
-    # Assign types to nodes
-    assigned_types = backbone_assign_types(topo, types)
-
-    # Modify the node labels to name them as a combination of the type and an index
-    name_nodes = rename_nodes(assigned_types, types)
-    topo = nx.relabel_nodes(topo, dict(zip(topo.nodes, name_nodes)))
-
-    # Generate positions of the nodes based on the spectral distribution
-    pos = None
-
-    # print(algo)
-    match algo:
-        case nc.KAMADA_ALGO:
-            pos = nx.kamada_kawai_layout(topo)
-        case nc.SPRING_ALGO:
-            pos = nx.spring_layout(topo)
-        case nc.SPIRAL_ALGO:
-            pos = nx.spiral_layout(topo)
-        case nc.SHELL_ALGO:
-            pos = nx.shell_layout(topo)
-        case _:
-            pos = nx.spectral_layout(topo)
-
-    # Other options for the positions
-    # pos = nx.kamada_kawai_layout(topo)
-    # pos = nx.spring_layout(topo)
-    # print(pos)
-
-    # Assign the positions to the topology
-    # plt.rcParams["figure.figsize"] = [3 * val for val in plt.rcParamsDefault["figure.figsize"]]
-    # nx.draw(topo, pos=pos, with_labels=True, font_weight='bold')
-    # plt.savefig(filename + ".png")
-    # plt.figure().clear()
-
-    # Calculate distance limits
-    max_upper = upper_limits[len(upper_limits) - 1]
-    # Modify the limits to approximate to the expected percentages per distance range
-    corrected_max_upper = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
-    # modify distances from the ones in the graph to the actual expected scale
-    distances = calculate_edge_distances(topo, pos, corrected_max_upper)
-    # print("Count distance per range:", count_distance_ranges(distances, upper_limits))
-
-    # Generate a sequence of colors for each node depending on the type
-    colors = color_nodes(assigned_types, dict_colors)
-
-    # Write Excel file
-    # write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet)
-    return topo, distances, assigned_types, node_sheet, link_sheet, pos, colors
-
-
-def write_backbone(filename, topo, distances, assigned_types, figure, node_sheet="nodes", link_sheet="links",
-                   clusters=None, pos=None, reference_nodes=None):
+def write_network(filename, topo, distances, assigned_types, figure, node_sheet="nodes", link_sheet="links",
+                  clusters=None, pos=None, reference_nodes=None, type_nw=nc.BACKBONE):
     figure.savefig(filename + ".png")
     x_coord = [0] * len(topo.nodes)
     y_coord = [0] * len(topo.nodes)
     if pos is not None:
         x_coord, y_coord = zip(*pos.values())
-    write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet, clusters, x_coord,
-                      y_coord, reference_nodes)
+    return write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet, clusters, x_coord,
+                             y_coord, reference_nodes, coord_type=type_nw)
 
 
 # Generate a region of a Metro Core Network
 def metro_core_split(filename, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
-                     national_nodes=[]):
+                     national_nodes=[], add_prefix=""):
     node_sheet = "Nodes"
     link_sheet = "Links"
 
@@ -160,7 +78,7 @@ def metro_core_split(filename, degrees, weights, upper_limits, types, dict_color
     colors = color_nodes(assigned_types, dict_colors)
 
     # Modify the node labels to name them as a combination of the type and an index
-    name_nodes = rename_nodes(assigned_types, types, nc.NATIONAL_CO_CODE, national_nodes)
+    name_nodes = rename_nodes(assigned_types, types, nc.NATIONAL_CO_CODE, national_nodes, add_prefix)
     topo = nx.relabel_nodes(topo, dict(zip(topo.nodes, name_nodes)))
 
     # Generate positions of the nodes based on the spectral/spring distribution
@@ -196,7 +114,7 @@ def metro_core_split(filename, degrees, weights, upper_limits, types, dict_color
 
     # Write Excel file
     if filename is not None:
-        write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet)
+        write_network_xls(filename, topo, distances, assigned_types, node_sheet, link_sheet, coord_type=nc.METRO_CORE)
 
     return topo, distances, assigned_types, pos, colors
 
@@ -230,7 +148,7 @@ def format_node_list(nodes):
     for i in nodes:
         if process != 0:
             result = result + ","
-        process = process+1
+        process = process + 1
         result = result + i
         if process == 10:
             result = result + "\n"

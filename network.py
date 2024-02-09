@@ -1,11 +1,12 @@
 import collections
-
+import networkconstants as nc
 import networkx as nx
 import random
 from scipy.spatial import distance
 import pandas as pd
 from openpyxl import load_workbook
 import os.path
+import Texts_EN as texts
 
 
 # Generate topology with the specific degrees and weights and the specified number of nodes
@@ -62,7 +63,7 @@ def calculate_edge_distances(graph, positions, max_limit):
 
 
 # Rename nodes combining Type and index
-def rename_nodes(assigned_types, types, special_rename_type=None, explicit_values=None):
+def rename_nodes(assigned_types, types, special_rename_type=None, explicit_values=None, add_prefix=""):
     indexes = dict(zip(types.code, [1] * len(types)))
     # print(indexes)
     # names = [''] * len(assigned_types)
@@ -70,71 +71,154 @@ def rename_nodes(assigned_types, types, special_rename_type=None, explicit_value
     #    names[i] = assigned_types[i] + str(indexes[assigned_types[i]])
     #    indexes[assigned_types[i]] += 1
     # return names
-    names, indexes = rename_nodes_idx(assigned_types, indexes, special_rename_type, explicit_values)
+    names, indexes = rename_nodes_idx(assigned_types, indexes, special_rename_type, explicit_values, add_prefix)
     return names
 
 
 # Rename nodes combining Type and index and receiving initial index per type
-def rename_nodes_idx(assigned_types, indexes, special_rename_type=None, explicit_values=None):
+def rename_nodes_idx(assigned_types, indexes, special_rename_type=None, explicit_values=None, add_prefix=""):
     names = [''] * len(assigned_types)
     # print(explicit_values)
     for i in range(len(assigned_types)):
         if assigned_types[i] == special_rename_type:
             names[i] = explicit_values[indexes[assigned_types[i]] - 1]
         else:
-            names[i] = assigned_types[i] + str(indexes[assigned_types[i]])
+            names[i] = assigned_types[i] + add_prefix + str(indexes[assigned_types[i]])
         indexes[assigned_types[i]] += 1
     return names, indexes
 
 
 # Write Excel file with two sheets
 def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, macro_region=None, x_coord=None,
-                      y_coord=None, reference_nodes=None):
+                      y_coord=None, reference_nodes=None, coord_type=nc.BACKBONE, households=None, macro_cells=None,
+                      small_cells=None, regional_twins=None, national_twins=None, link_capacities=None):
+    x_coord_back = [0.00] * len(graph.nodes)
+    y_coord_back = [0.00] * len(graph.nodes)
+    x_coord_m_core = [0.00] * len(graph.nodes)
+    y_coord_m_core = [0.00] * len(graph.nodes)
+
+    match coord_type:
+        case nc.METRO_CORE:
+            x_coord_m_core = x_coord
+            y_coord_m_core = y_coord
+        case _:
+            x_coord_back = x_coord
+            y_coord_back = y_coord
+            if reference_nodes is None:
+                reference_nodes = [val for val in graph.nodes]
+
     if macro_region is None:
         macro_region = [0] * len(graph.nodes)
-    if x_coord is None:
-        x_coord = [0] * len(graph.nodes)
-    if y_coord is None:
-        y_coord = [0] * len(graph.nodes)
+
     if reference_nodes is None:
         reference_nodes = [''] * len(graph.nodes)
-    nodes_df = pd.DataFrame({'node_name': [val for val in graph.nodes],
-                             'node_code': ['HL1'] * len(graph.nodes),
-                             'Node Type': ['Backbone'] * len(graph.nodes),
-                             'Central office type': types,
-                             'Reference Regional CO': [val for val in graph.nodes],
-                             'Reference National CO': reference_nodes,
-                             'Households': [12000] * len(graph.nodes),
-                             'Macro cells sites': [8] * len(graph.nodes),
-                             'Small cell sites': [24] * len(graph.nodes),
-                             'Twin Regional CO': [''] * len(graph.nodes),
-                             'Twin National CO': [''] * len(graph.nodes),
-                             'Macro region': macro_region,
-                             'x coord': x_coord,
-                             'y_coord': y_coord
-                             # 'Degrees': [val for u, val in graph.degree],
+
+    if national_twins is None:
+        national_twins = [''] * len(graph.nodes)
+
+    if regional_twins is None:
+        regional_twins = [''] * len(graph.nodes)
+
+    if households is None:
+        households = [12000] * len(graph.nodes)
+
+    if macro_cells is None:
+        macro_cells = [8] * len(graph.nodes)
+
+    if small_cells is None:
+        small_cells = [24] * len(graph.nodes)
+
+    if link_capacities is None:
+        link_capacities = [100] * len(graph.edges)
+
+    nodes_df = pd.DataFrame({nc.XLS_NODE_NAME: [val for val in graph.nodes],
+                             nc.XLS_CO_TYPE: types,
+                             nc.XLS_REF_RCO: [val for val in graph.nodes],
+                             nc.XLS_REF_NCO: reference_nodes,
+                             nc.XLS_HOUSE_H: households,
+                             nc.XLS_MACRO_C: macro_cells,
+                             nc.XLS_SMALL_C: small_cells,
+                             nc.XLS_TWIN_RCO: regional_twins,
+                             nc.XLS_TWIN_NCO: national_twins,
+                             nc.XLS_CLUSTER: macro_region,
+                             nc.XLS_X_BACK: x_coord_back,
+                             nc.XLS_Y_BACK: y_coord_back,
+                             nc.XLS_X_MCORE: x_coord_m_core,
+                             nc.XLS_Y_MCORE: y_coord_m_core,
                              })
-    links_df = pd.DataFrame({'sourceID': [u for u, v in graph.edges],
-                             'destinationID': [v for u, v in graph.edges],
-                             'distanceKm': distances,
-                             'capacityGbps': [100] * len(graph.edges)}
+    links_df = pd.DataFrame({nc.XLS_SOURCE_ID: [u for u, v in graph.edges],
+                             nc.XLS_DEST_ID: [v for u, v in graph.edges],
+                             nc.XLS_DISTANCE: distances,
+                             nc.XLS_CAPACITY_GBPS: link_capacities}
                             )
     if os.path.isfile(file):
-        with pd.ExcelWriter(file, engine='openpyxl', mode="a", if_sheet_exists='overlay') as writer:
-            book=load_workbook(file)
+        res, message, nodes_df, links_df = merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df, coord_type)
+        if not res:
+            return res, message
+        with pd.ExcelWriter(file, engine='openpyxl') as writer:
+            nodes_df.to_excel(writer, sheet_name=node_sheet, index=False)
+            links_df.to_excel(writer, sheet_name=link_sheet, index=False)
+            # with pd.ExcelWriter(file, engine='openpyxl', mode="a", if_sheet_exists='overlay') as writer:
+            '''book = load_workbook(file)
             # writer.book=book
-            writer.sheets.update(dict((ws.title, ws) for ws in book.worksheets))
+            writer.sheets.update(dict((ws.title, ws) for ws in book.worksheets))'''
 
-            nodes_df.to_excel(writer, sheet_name=node_sheet, index=False, header=False,
-                              startrow=writer.sheets[node_sheet].max_row)
-            links_df.to_excel(writer, sheet_name=link_sheet, index=False, header=False,
-                              startrow=writer.sheets[link_sheet].max_row)
+            '''nodes_df.to_excel(writer, sheet_name=node_sheet, index=False, header=False,
+                              startrow=writer.sheets[node_sheet].max_row)'''
+            '''links_df.to_excel(writer, sheet_name=link_sheet, index=False, header=False,
+                              startrow=writer.sheets[link_sheet].max_row)'''
     else:
         with pd.ExcelWriter(file, engine='openpyxl') as writer:
             nodes_df.to_excel(writer, sheet_name=node_sheet, index=False)
             links_df.to_excel(writer, sheet_name=link_sheet, index=False)
 
-    return True
+    return True, ""
+
+
+def merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df, coord_type):
+    ex_nodes = pd.read_excel(file, node_sheet, engine="openpyxl")
+    existing_links = pd.read_excel(file, link_sheet, engine="openpyxl")
+    node_names = nodes_df[nc.XLS_NODE_NAME]
+    same = pd.merge(node_names, ex_nodes, on=[nc.XLS_NODE_NAME])
+    link_ids = existing_links[[nc.XLS_SOURCE_ID, nc.XLS_DEST_ID]]
+    same_links = pd.merge(link_ids, links_df, on=[nc.XLS_SOURCE_ID, nc.XLS_DEST_ID])
+
+    if len(same_links) > 0:
+        return False, texts.LINK_EXISTS, nodes_df
+
+    # We are generating a backbone network, but there is already one defined
+    if coord_type == nc.BACKBONE and max(ex_nodes[nc.XLS_X_BACK]) > 0:
+        return False, texts.BACKBONE_EXISTS, nodes_df
+
+    # We are generating a metro core network but the node was already used for another macro region
+    if coord_type == nc.METRO_CORE and max(same[nc.XLS_X_MCORE]) > 0:
+        return False, texts.METRO_CORE_CONFLICT, nodes_df, links_df
+
+    # We are creating a metro core network and one of the nodes already exists (probably mapped from
+    # the backbone network. Let's add information related to the coordinates and update other fields
+    if coord_type == nc.METRO_CORE and len(same) > 0:
+       #nc.XLS_X_MCORE, nc.XLS_Y_MCORE]
+        for name in same[nc.XLS_NODE_NAME]:
+            # TODO read all at once and write them together
+            hh = nodes_df.loc[nodes_df[nc.XLS_NODE_NAME] == name, nc.XLS_HOUSE_H].iloc[0]
+            mc = nodes_df.loc[nodes_df[nc.XLS_NODE_NAME] == name, nc.XLS_MACRO_C].iloc[0]
+            sc = nodes_df.loc[nodes_df[nc.XLS_NODE_NAME] == name, nc.XLS_SMALL_C].iloc[0]
+            x_coord = nodes_df.loc[nodes_df[nc.XLS_NODE_NAME] == name, nc.XLS_X_MCORE].iloc[0]
+            y_coord = nodes_df.loc[nodes_df[nc.XLS_NODE_NAME] == name, nc.XLS_Y_MCORE].iloc[0]
+
+            ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == name, nc.XLS_HOUSE_H] = hh
+            ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == name, nc.XLS_MACRO_C] = mc
+            ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == name, nc.XLS_SMALL_C] = sc
+            ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == name, nc.XLS_X_MCORE] = x_coord
+            ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == name, nc.XLS_Y_MCORE] = y_coord
+
+            nodes_df = nodes_df[nodes_df[nc.XLS_NODE_NAME] != name]
+
+        ex_nodes.update(ex_nodes, overwrite=True)
+
+    nodes_df = pd.concat([ex_nodes, nodes_df])
+    links_df = pd.concat([existing_links, links_df])
+    return True, texts.NO_ERROR, nodes_df, links_df
 
 
 # Write Excel file with two sheets

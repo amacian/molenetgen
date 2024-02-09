@@ -4,13 +4,16 @@ from matplotlib import pyplot as plt
 import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
+import Texts_EN
 import networkconstants as nc
 from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator
 from BackboneGenerator import BackboneGenerator, DefaultBackboneGenerator, DualBackboneGenerator
 from KeyValueList import KeyValueList
-from generator import write_backbone
+from generator import write_network
 import pandas as pd
 from network import format_distance_limits
+import Texts_EN as texts
 
 
 # Class for the Tkinter Topology Generator Application
@@ -33,7 +36,7 @@ class BackboneGenApp:
         self.figure = None
         # Root component
         self.root = tk.Tk()
-        self.root.title("Backbone Topology Generator")
+        self.root.title(Texts_EN.BACKBONE_APP_TITLE)
         self.root.geometry('800x800')
         # Value that holds if the single clusters should be removed
         self.remove_single_clusters = tk.BooleanVar(self.root)
@@ -71,7 +74,7 @@ class BackboneGenApp:
         tab1, degree_list, type_list = self.create_tab_list(notebook, "Degrees", "Weights", "Number of nodes",
                                                             "params", "Types", "Weights", degrees, weights, types,
                                                             nodes)
-        notebook.add(tab1, text="Degree constraints")
+        notebook.add(tab1, text=Texts_EN.TAB_CONTRAINTS)
 
         # The second tab creates the graph and returns a pointer to the canvas
         tab2, canvas = self.create_tab_image(notebook)
@@ -106,15 +109,22 @@ class BackboneGenApp:
 
     # Save the information to file
     def save_to_file(self):
+        result = False
+        message = texts.FILE_NOT_FOUND
         file_path = filedialog.asksaveasfilename(defaultextension=".xlsx",
                                                  filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
         if file_path:
-            write_backbone(file_path, self.topo, self.distances, self.assigned_types, self.figure,
-                           clusters=self.clusters, pos=self.pos)
+            result, message = write_network(file_path, self.topo, self.distances, self.assigned_types, self.figure,
+                                            clusters=self.clusters, pos=self.pos)
+        if not result:
+            tk.messagebox.showerror('', message)
+        else:
+            tk.messagebox.showinfo('', texts.COMPLETED)
+
 
     def create_tab_save(self, parent):
         frame = ttk.Frame(parent)
-        save_button = tk.Button(frame, text="Save to File", command=self.save_to_file)
+        save_button = tk.Button(frame, text=texts.SAVE_TO_FILE, command=self.save_to_file)
         save_button.pack(pady=10)
         return frame
 

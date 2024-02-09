@@ -61,6 +61,7 @@ class DistanceBasedClusterGenerator(ClusterGenerator):
         excluded_indices = [index for index, value in list(enumerate(types)) if value in nc.TYPES_EXCLUDED]
         # convert the cluster labels into a list to insert additional clusters
         cluster_labels = list(cluster_labels)
+
         # Group all the excluded nodes into the same new cluster label (not really a cluster)
         for i in excluded_indices:
             cluster_labels.insert(i, num_clusters)
@@ -79,7 +80,6 @@ class DistanceBasedClusterGenerator(ClusterGenerator):
     # types - list of types for each node
     # excluded_indices - elements from the nodes list that are to be excluded
     def merge_individual_clusters(self, nodes, pos, cluster_dict, cluster_labels, types, excluded_indices):
-        # Take the coordinates as vectors (TODO remove type if it is no finally needed)
         coord = [(pos[0], pos[1]) for pos, type_e in zip(list(pos.values()), types)]
         # set coordinates far away for the excluded indices, so they are not found as the nearest nodes
         for i in excluded_indices:
@@ -124,3 +124,68 @@ class DistanceBasedClusterGenerator(ClusterGenerator):
             cluster_dict[cluster_one_positions[old_cluster]] = np.array([])
         # Return the updated list of labels
         return cluster_labels
+
+
+class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
+    def merge_individual_clusters(self, nodes, pos, cluster_dict, cluster_labels, types, excluded_indices):
+        return
+
+    # Group nodes creating clusters
+    # topo - the networkx topology
+    # types - list of assigned types for each node
+    # pos - the array of positions created by the corresponding algorithm
+    # eps - distance used as reference for grouping
+    # avoid_single - decide if avoid clusters with just 1 node by reassigning them ignoring eps
+    def find_groups(self, topo, types, pos, eps=0.1, avoid_single=True):
+        # Create a list with all the nodes
+        nodes = [u for u in topo.nodes]
+        # Create a sublist with just the nodes of types included
+        nodes_pending = [element for element, type_e in zip(nodes, types) if type_e not in nc.TYPES_EXCLUDED]
+        # Define the coordinates as lists of x, y for each node
+        coord = [[pos[0], pos[1]] for pos, type_e in zip(list(pos.values()), types) if type_e not in nc.TYPES_EXCLUDED]
+        # Apply the DBSCAN clustering algorithm with Euclidean metric
+        db = DBSCAN(eps, min_samples=1, algorithm='auto', metric='euclidean').fit(coord)
+
+        # Retrieve the assigned labels
+        cluster_labels = db.labels_
+        # Get the number of clusters
+        num_clusters = len(set(cluster_labels))
+        # Convert nodes_pending into an np array for later handling
+        nodes_pending = np.array(nodes_pending)
+
+        # Create a dictionary with key=cluster index and values the set of nodes of the cluster
+        cluster_dict = {i: nodes_pending[(cluster_labels == i)] for i in range(num_clusters)}
+
+        node_list = list(nodes)
+        for i in range(num_clusters):
+            cluster = cluster_dict.get(i)
+            # Look for the position of the first node to retrieve its cluster number
+            position = node_list.index(cluster[0])
+            cluster_id = cluster_labels[position]
+            self.split_disconnected_cluster(cluster_id, cluster, cluster_labels, cluster_dict, topo)
+        # Retrieve the indexes of the node list that are of an excluded type
+        excluded_indices = [index for index, value in list(enumerate(types)) if value in nc.TYPES_EXCLUDED]
+        # convert the cluster labels into a list to insert additional clusters
+        cluster_labels = list(cluster_labels)
+
+        # Group all the excluded nodes into the same new cluster label (not really a cluster)
+        for i in excluded_indices:
+            cluster_labels.insert(i, num_clusters)
+        # If we want to avoid clusters with just 1 node
+        if avoid_single:
+            cluster_labels = self.merge_individual_clusters(nodes, pos, cluster_dict, cluster_labels, types,
+                                                            excluded_indices)
+
+        return cluster_dict, cluster_labels
+
+    def split_disconnected_cluster(self, cluster_label, cluster, cluster_labels, cluster_dict, topo):
+        # Create a list of nodes with the first one
+        # Get edges for that node
+        # Add to the list of all the nodes in the cluster connected
+        # Continue with  nodes found and do the same process until no new nodes are added
+        # Include other nodes in the cluster at those edges i
+        for node in cluster:
+            #topo.get
+            print(node)
+        return
+

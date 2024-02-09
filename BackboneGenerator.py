@@ -21,8 +21,8 @@ class BackboneGenerator(ABC):
 class DefaultBackboneGenerator(BackboneGenerator):
     def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}):
         # Sheet names in the Excel file for nodes and links
-        node_sheet = "Nodes"
-        link_sheet = "Links"
+        node_sheet = nc.NODES_EXCEL_NAME
+        link_sheet = nc.LINKS_EXCEL_NAME
 
         # Repeat
         while True:
@@ -137,7 +137,6 @@ class DualBackboneGenerator(BackboneGenerator):
                                           topo,
                                           idx)
 
-            # break  # TODO Remove after test
 
         # Calculate distance limits
         max_upper = upper_limits[len(upper_limits) - 1]
