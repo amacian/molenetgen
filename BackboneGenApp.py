@@ -4,14 +4,20 @@ from matplotlib import pyplot as plt
 import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import networkconstants as nc
+from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator
+from BackboneGenerator import BackboneGenerator, DefaultBackboneGenerator, DualBackboneGenerator
 from KeyValueList import KeyValueList
-from generator import backbone, write_backbone, find_groups
+from generator import write_backbone
 import pandas as pd
 from network import format_distance_limits
 
 
 # Class for the Tkinter Topology Generator Application
 class BackboneGenApp:
+    back_gen: BackboneGenerator
+    cluster_gen: ClusterGenerator
+
     # degrees - degrees of connectivity
     # weights - distribution of % of elements per each degree
     # nodes - number of nodes
@@ -19,6 +25,10 @@ class BackboneGenApp:
     # types - dataframe with office codes (e.g. RCO) and proportions
     # dict_colors - dictionary that maps types to colors for the basic graph
     def __init__(self, degrees, weights, nodes, upper_limits, types, dict_colors={}):
+        # Backbone generator object
+        self.back_gen = DefaultBackboneGenerator()
+        # Cluster generator object
+        self.cluster_gen = DistanceBasedClusterGenerator()
         # Variable to hold the default figure
         self.figure = None
         # Root component
@@ -44,9 +54,10 @@ class BackboneGenApp:
         # the list of type per node, the name of the node and link sheets at the excel file
         # the position of the nodes and the assigned colors
         self.topo, self.distances, self.assigned_types, \
-            self.node_sheet, self.link_sheet, self.pos, self.colors = backbone(degrees, weights, nodes,
-                                                                               self.upper_limits, types,
-                                                                               dict_colors=dict_colors)
+            self.node_sheet, self.link_sheet, \
+            self.pos, self.colors = self.back_gen.generate(degrees, weights, nodes,
+                                                           self.upper_limits, types,
+                                                           dict_colors=dict_colors)
         # Variable to hold the assigned clusters
         self.clusters = None
 
@@ -82,11 +93,12 @@ class BackboneGenApp:
         # and the generation algorithm from the parameters tab (first one)
         node_number = self.root.nametowidget("notebook_gen.params.entry_node")
         algorithm = self.root.nametowidget("notebook_gen.params.algo")
+        generator = self.root.nametowidget("notebook_gen.params.gen")
         # Create a Run button that calls back the rerun backbone method
         run_button = tk.Button(self.root, text="Run",
                                command=lambda: self.rerun_backbone(tab2, degree_list,
                                                                    node_number, type_list,
-                                                                   algorithm))
+                                                                   algorithm, generator.get()))
         run_button.pack(side=tk.BOTTOM)
 
         # Start the Tkinter event loop
@@ -114,10 +126,9 @@ class BackboneGenApp:
         x_size = max(x_pos) - min(x_pos)
         y_size = max(y_pos) - min(y_pos)
 
-        print("x,y:", x_size, ":", y_size)
+        # Resize to have always the same Y size
         x_size = x_size * 10 / y_size
         y_size = 10
-        print("x,y:", x_size, ":", y_size)
 
         self.figure = plt.Figure(figsize=(x_size, y_size), tight_layout=True, dpi=50)
         self.fig_width = x_size
@@ -127,7 +138,7 @@ class BackboneGenApp:
 
         # Add the Tkinter canvas to the window
         # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N )
+        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
         # print(self.colors)
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
@@ -173,17 +184,24 @@ class BackboneGenApp:
         # Algorithm
         label_algo = tk.Label(frame, text="Algorithm")
         combo = ttk.Combobox(frame, name="algo", state="readonly",
-                             values=["spectral", "kamada", "spring", "spiral", "shell"])
+                             values=[nc.SPECTRAL_ALGO, nc.KAMADA_ALGO, nc.SPRING_ALGO, nc.SPIRAL_ALGO, nc.SHELL_ALGO])
         combo.current(0)
         label_algo.grid(row=(18 + initial_row), column=0, pady=5)
         combo.grid(row=(18 + initial_row), column=1, pady=5)
 
+        # Generator
+        label_gen= tk.Label(frame, text="Generator")
+        combo_gen = ttk.Combobox(frame, name="gen", state="readonly",
+                             values=["Default", "Dual"])
+        combo_gen.current(0)
+        label_gen.grid(row=(19 + initial_row), column=0, pady=5)
+        combo_gen.grid(row=(19 + initial_row), column=1, pady=5)
         return frame, degree_list, type_list
 
     def create_tab_grouping(self, parent, frame_name):
         frame = ttk.Frame(parent, name=frame_name)
         combo = ttk.Combobox(frame, name="max_group", state="readonly",
-                             values=["0.05", "0.055", "0.06", "0.065", "0.07", "0.075",
+                             values=["0.03", "0.05", "0.055", "0.06", "0.065", "0.07", "0.075",
                                      "0.08", "0.085", "0.09", "0.095", "0.1", "0.11",
                                      "0.12", "0.125", "0.13", "0.14", "0.15"])
         combo.current(0)
@@ -210,7 +228,11 @@ class BackboneGenApp:
     # type_list - A key value list with the proportion of types
     # algorithm - The algorithm to be used in the graph generation
     def rerun_backbone(self, frame, degree_list: KeyValueList, node_number,
-                       type_list: KeyValueList, algorithm):
+                       type_list: KeyValueList, algorithm, generator):
+        if generator == "Default":
+            self.back_gen = DefaultBackboneGenerator()
+        else:
+            self.back_gen = DualBackboneGenerator()
         old_canvas = None
         # Types and percentages for the nodes
         type_key_vals = type_list.get_entries()
@@ -237,9 +259,10 @@ class BackboneGenApp:
             print("Error in number of nodes, using default: ", nodes)
 
         # Call the backbone function with the expected parameters
-        self.topo, self.distances, self.assigned_types, self.node_sheet, self.link_sheet, self.pos, self.colors = \
-            backbone(degrees, weights, nodes, self.upper_limits, types, algorithm.get(),
-                     self.color_codes)
+        self.topo, self.distances, self.assigned_types, \
+            self.node_sheet, self.link_sheet, self.pos, self.colors = \
+            self.back_gen.generate(degrees, weights, nodes, self.upper_limits, types, algorithm.get(),
+                                   self.color_codes)
 
         # Get x and y coordinates for all the elements
         x_pos = [pos[0] for pos in list(self.pos.values())]
@@ -267,7 +290,7 @@ class BackboneGenApp:
 
         # canvas_widget.config(width=x_size, height=y_size)
         # Add the Tkinter canvas to the window
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N )
+        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
         # Draw the figure
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
@@ -287,7 +310,7 @@ class BackboneGenApp:
         # Find the combo that defines the eps
         combo = self.root.nametowidget("notebook_gen.group_tab.max_group")
         # Call the function that generates the tab
-        groups, self.clusters = find_groups(self.topo, self.assigned_types, self.pos,
+        groups, self.clusters = self.cluster_gen.find_groups(self.topo, self.assigned_types, self.pos,
                                             eps=float(combo.get()), avoid_single=self.remove_single_clusters.get())
         # Retrieve a reference to the frame and to the label included in that frame
         frame = self.root.nametowidget("notebook_gen.group_tab")

@@ -7,10 +7,9 @@ from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import networkconstants
-from generator import write_backbone, find_groups, format_node_list, \
+from generator import write_backbone, format_node_list, \
     metro_aggregation_horseshoe
 import pandas as pd
-from network import format_distance_limits
 
 
 # Class for the Tkinter Topology Generator Application

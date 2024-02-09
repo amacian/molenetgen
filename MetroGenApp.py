@@ -7,7 +7,7 @@ from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from KeyValueList import KeyValueList
 from ValueList import ValueList
-from generator import write_backbone, find_groups, metro_core_split, ring_structure_tel
+from generator import write_backbone, metro_core_split, ring_structure_tel
 import pandas as pd
 from network import format_distance_limits
 import networkconstants as nc
@@ -68,7 +68,7 @@ class MetroGenApp:
         types["number"] = total.astype(int)
 
         self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
-            metro_core_split(None, degrees, weights, self.upper_limits, types, dict_colors, algo="kamada")
+            metro_core_split(None, degrees, weights, self.upper_limits, types, dict_colors, algo=nc.KAMADA_ALGO)
         # Variable to hold the assigned clusters
         self.clusters = None
         self.radio_val = tk.StringVar(value="0")
@@ -263,7 +263,7 @@ class MetroGenApp:
         # Algorithm
         label_algo = tk.Label(frame, text="Algorithm")
         combo = ttk.Combobox(frame, name="algo", state="readonly",
-                             values=["spectral", "kamada", "spring", "spiral", "shell"])
+                             values=[nc.SPECTRAL_ALGO, nc.KAMADA_ALGO, nc.SPRING_ALGO, nc.SPIRAL_ALGO, nc.SHELL_ALGO])
         combo.current(1)
         label_algo.grid(row=(18 + initial_row), column=0, pady=5)
         combo.grid(row=(18 + initial_row), column=1, pady=5)
