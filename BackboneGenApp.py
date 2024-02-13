@@ -7,7 +7,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import Texts_EN
 import networkconstants as nc
-from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator
+from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator, DistanceConnectedBasedClusterGenerator
 from BackboneGenerator import BackboneGenerator, DefaultBackboneGenerator, DualBackboneGenerator
 from KeyValueList import KeyValueList
 from generator import write_network
@@ -32,6 +32,7 @@ class BackboneGenApp:
         self.back_gen = DefaultBackboneGenerator()
         # Cluster generator object
         self.cluster_gen = DistanceBasedClusterGenerator()
+        # self.cluster_gen = DistanceConnectedBasedClusterGenerator()
         # Variable to hold the default figure
         self.figure = None
         # Root component
@@ -121,7 +122,6 @@ class BackboneGenApp:
         else:
             tk.messagebox.showinfo('', texts.COMPLETED)
 
-
     def create_tab_save(self, parent):
         frame = ttk.Frame(parent)
         save_button = tk.Button(frame, text=texts.SAVE_TO_FILE, command=self.save_to_file)
@@ -200,9 +200,9 @@ class BackboneGenApp:
         combo.grid(row=(18 + initial_row), column=1, pady=5)
 
         # Generator
-        label_gen= tk.Label(frame, text="Generator")
+        label_gen = tk.Label(frame, text="Generator")
         combo_gen = ttk.Combobox(frame, name="gen", state="readonly",
-                             values=["Default", "Dual"])
+                                 values=["Default", "Dual"])
         combo_gen.current(0)
         label_gen.grid(row=(19 + initial_row), column=0, pady=5)
         combo_gen.grid(row=(19 + initial_row), column=1, pady=5)
@@ -210,21 +210,31 @@ class BackboneGenApp:
 
     def create_tab_grouping(self, parent, frame_name):
         frame = ttk.Frame(parent, name=frame_name)
+        label_EPS = tk.Label(frame, text="Select max epsilon to group")
+        label_EPS.grid(row=0, column=0)
         combo = ttk.Combobox(frame, name="max_group", state="readonly",
                              values=["0.03", "0.05", "0.055", "0.06", "0.065", "0.07", "0.075",
                                      "0.08", "0.085", "0.09", "0.095", "0.1", "0.11",
                                      "0.12", "0.125", "0.13", "0.14", "0.15"])
         combo.current(0)
-        combo.grid(row=0, column=0, pady=5)
+        combo.grid(row=0, column=1, pady=5)
+        label_single = tk.Label(frame, text="Avoid single nodes")
+        label_single.grid(row=1, column=0)
         check = ttk.Checkbutton(frame, name="avoid_single", variable=self.remove_single_clusters)
-        check.grid(row=0, column=1, pady=5)
+        check.grid(row=1, column=1, pady=5)
+        label_algo = tk.Label(frame, text="Select clustering strategy")
+        label_algo.grid(row=2, column=0)
+        combo = ttk.Combobox(frame, name="algo_cluster",
+                             values=["By distance only", "By distance and Connected"])
+        combo.current(0)
+        combo.grid(row=2, column=1, pady=5)
         group_button = tk.Button(frame, text="Search for groups", command=self.group_graph)
-        group_button.grid(row=0, column=2, pady=5)
+        group_button.grid(row=2, column=2, pady=5)
         label_groups = tk.Label(frame,
                                 text="",
                                 name="print_groups", anchor="w")
         # label_printable.pack(side=tk.BOTTOM)
-        label_groups.grid(row=1, column=0, columnspan=2, sticky=tk.S)
+        label_groups.grid(row=3, column=0, columnspan=2, sticky=tk.S)
 
         canvas = FigureCanvasTkAgg(self.figure, master=frame)
         self.group_graph()
@@ -319,9 +329,15 @@ class BackboneGenApp:
     def group_graph(self):
         # Find the combo that defines the eps
         combo = self.root.nametowidget("notebook_gen.group_tab.max_group")
+        # Find the combo that defines the Clustering method
+        cluster_alg = self.root.nametowidget("notebook_gen.group_tab.algo_cluster")
+        match cluster_alg.get():
+            case "By distance only": self.cluster_gen = DistanceBasedClusterGenerator()
+            case _: self.cluster_gen = DistanceConnectedBasedClusterGenerator()
         # Call the function that generates the tab
         groups, self.clusters = self.cluster_gen.find_groups(self.topo, self.assigned_types, self.pos,
-                                            eps=float(combo.get()), avoid_single=self.remove_single_clusters.get())
+                                                             eps=float(combo.get()),
+                                                             avoid_single=self.remove_single_clusters.get())
         # Retrieve a reference to the frame and to the label included in that frame
         frame = self.root.nametowidget("notebook_gen.group_tab")
         label = self.root.nametowidget("notebook_gen.group_tab.print_groups")
@@ -337,7 +353,7 @@ class BackboneGenApp:
 
         # canvas_widget.config(width=x_size, height=y_size)
         # Add the Tkinter canvas to the window
-        canvas_widget.grid(row=2, column=0, columnspan=3, sticky=tk.W + tk.E + tk.N + tk.S)
+        canvas_widget.grid(row=3, column=0, columnspan=3, sticky=tk.W + tk.E + tk.N + tk.S)
         # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         # Define the color map that will be used to represent the clusters
         color_map = plt.cm.rainbow
