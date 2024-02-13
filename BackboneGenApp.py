@@ -9,10 +9,11 @@ import Texts_EN
 import networkconstants as nc
 from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator, DistanceConnectedBasedClusterGenerator
 from BackboneGenerator import BackboneGenerator, DefaultBackboneGenerator, DualBackboneGenerator
+from DistanceSetterWindow import DistanceSetterWindow
 from KeyValueList import KeyValueList
 from generator import write_network
 import pandas as pd
-from network import format_distance_limits
+from network import format_distance_limits, calculate_edge_distances
 import Texts_EN as texts
 
 
@@ -28,6 +29,9 @@ class BackboneGenApp:
     # types - dataframe with office codes (e.g. RCO) and proportions
     # dict_colors - dictionary that maps types to colors for the basic graph
     def __init__(self, degrees, weights, nodes, upper_limits, types, dict_colors={}):
+        # Store the distance ranges and the max distance value
+        self.upper_limits = upper_limits
+        self.max_upper=max(self.upper_limits)
         # Backbone generator object
         self.back_gen = DefaultBackboneGenerator()
         # Cluster generator object
@@ -49,9 +53,6 @@ class BackboneGenApp:
         # Default figure height and width
         self.fig_height = 10
         self.fig_width = 10
-
-        # variable for the upper limits of the distances.
-        self.upper_limits = upper_limits
 
         # Generate the backbone network using the predefined parameters.
         # Retrieve the generated topology, a list with distance per edge,
@@ -105,6 +106,8 @@ class BackboneGenApp:
                                                                    algorithm, generator.get()))
         run_button.pack(side=tk.BOTTOM)
 
+        # Variable to hold the window to modify distances
+        self.setter = None
         # Start the Tkinter event loop
         self.root.mainloop()
 
@@ -152,12 +155,13 @@ class BackboneGenApp:
         # print(self.colors)
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
-
+        btn_set_distances = tk.Button(frame, text="Change distances", command=self.open_dist_window)
+        btn_set_distances.grid(row=1, column=0)
         label_printable = tk.Label(frame,
                                    text=format_distance_limits(self.distances, self.upper_limits),
                                    name="print_distances", anchor="w")
         # label_printable.pack(side=tk.BOTTOM)
-        label_printable.grid(row=2, column=0, sticky=tk.S)
+        label_printable.grid(row=5, column=0, sticky=tk.S)
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
         return frame, canvas
@@ -377,3 +381,26 @@ class BackboneGenApp:
                 break
         # Detroy the canvas
         old_canvas.destroy()
+
+    def open_dist_window(self):
+        if self.setter is None:
+            self.setter = DistanceSetterWindow(self, self.root, self.upper_limits)
+        else:
+            self.setter.show(self.upper_limits)
+
+    def set_distance_parameters(self):
+        self.distances = calculate_edge_distances(self.topo, self.pos, self.max_upper)
+
+    def set_upper_limits(self, upper_limits):
+        # variable for the upper limits of the distances.
+        self.upper_limits = upper_limits
+        # Get the highest limit
+        up_helper = self.upper_limits[len(self.upper_limits) - 1]
+        # Set the highest value to the point in the middle of the highest range
+        self.max_upper = up_helper - (up_helper - self.upper_limits[len(self.upper_limits) - 2]) / 2
+        # Calculate distances based on this parameter
+        self.set_distance_parameters()
+        # Update the description of % per link
+        output_label = self.root.nametowidget("notebook_gen.image_frame.print_distances")
+        output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
+

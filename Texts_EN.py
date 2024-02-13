@@ -10,3 +10,5 @@ BACKBONE_EXISTS = "There is already a backbone network defined in this file"
 METRO_CORE_CONFLICT = "Conflict with Metro Core node"
 
 SAVE_TO_FILE = "Save to File"
+
+EMPTY_LIST = "The list is empty"
