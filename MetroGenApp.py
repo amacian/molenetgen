@@ -1,4 +1,3 @@
-import matplotlib
 import networkx as nx
 import numpy as np
 from matplotlib import pyplot as plt
@@ -6,8 +5,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from KeyValueList import KeyValueList
+from MetroCoreGenerator import MetroCoreGenerator, DefaultMetroCoreGenerator
 from ValueList import ValueList
-from generator import write_network, metro_core_split, ring_structure_tel
+from generator import write_network
 import pandas as pd
 from network import format_distance_limits
 import networkconstants as nc
@@ -16,6 +16,7 @@ import Texts_EN as texts
 
 # Class for the Tkinter Topology Generator Application
 class MetroGenApp:
+    metro_gen: MetroCoreGenerator
 
     # degrees - degrees of connectivity
     # weights - distribution of % of elements per each degree
@@ -27,8 +28,12 @@ class MetroGenApp:
         if initial_refs is None:
             initial_refs = []
 
+        self.metro_gen = DefaultMetroCoreGenerator()
+        # Reference national nodes initialized to None
         self.national_ref_nodes = None
+        # Cluster list is empty but will be filled if read from file
         self.cluster_list = ["-"]
+        # Clusters of nodes will be filled if read from file
         self.nodes_clusters = {}
         # Variable to hold the default figure
         self.figure = None
@@ -69,7 +74,8 @@ class MetroGenApp:
         types["number"] = total.astype(int)
 
         self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
-            metro_core_split(None, degrees, weights, self.upper_limits, types, dict_colors, algo=nc.KAMADA_ALGO)
+            self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, dict_colors,
+                                         algo=nc.KAMADA_ALGO)
         # Variable to hold the assigned clusters
         self.clusters = None
         self.radio_val = tk.StringVar(value="0")
@@ -305,8 +311,11 @@ class MetroGenApp:
                 ring_size = self.root.nametowidget("notebook_gen.source_frame.from_file.ring_size")
                 (self.topo, self.distances, self.assigned_types, self.pos, self.colors,
                  self.national_ref_nodes) = \
-                    ring_structure_tel(int(ring_size.get()), node_ref_number[0], node_ref_number[1],
-                                       prefix="R" + selected_cluster + "-")
+                    self.metro_gen.generate_ring(int(ring_size.get()),
+                                                 node_ref_number[0],
+                                                 node_ref_number[1],
+                                                 prefix="R" + selected_cluster + "-",
+                                                 dict_colors=self.color_codes)
         # print(node_ref_number)
 
         if self.radio_val.get() == "0" or not self.ring_var.get():
@@ -350,8 +359,8 @@ class MetroGenApp:
                 add_prefix = "_" + selected_cluster + "_"
             # Call the metro function with the expected parameters
             self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
-                metro_core_split(None, degrees, weights, self.upper_limits, types, self.color_codes,
-                                 algorithm, node_ref_number, add_prefix)
+                self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
+                                             algorithm, node_ref_number, add_prefix)
             self.national_ref_nodes = ["" for i in self.topo.nodes]
         # Get x and y coordinates for all the elements
         x_pos = [pos[0] for pos in list(self.pos.values())]
@@ -410,7 +419,7 @@ class MetroGenApp:
         return
 
     def from_file(self):
-        frame = self.root.nametowidget("notebook_gen.source_frame")
+        # frame = self.root.nametowidget("notebook_gen.source_frame")
         subframe_list = self.root.nametowidget("notebook_gen.source_frame.from_nodes")
         subframe_file = self.root.nametowidget("notebook_gen.source_frame.from_file")
         subframe_list.grid_forget()
@@ -449,7 +458,7 @@ class MetroGenApp:
             for idx in idx_for_cluster:
                 if newline == 1:
                     text += "\n"
-                    newline == 10
+                    newline = 10
                 text += names[idx] + " "
                 newline -= 1
             text += "]\n"

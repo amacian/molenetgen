@@ -4,7 +4,6 @@ import networkx as nx
 import random
 from scipy.spatial import distance
 import pandas as pd
-from openpyxl import load_workbook
 import os.path
 import Texts_EN as texts
 
@@ -65,12 +64,6 @@ def calculate_edge_distances(graph, positions, max_limit):
 # Rename nodes combining Type and index
 def rename_nodes(assigned_types, types, special_rename_type=None, explicit_values=None, add_prefix=""):
     indexes = dict(zip(types.code, [1] * len(types)))
-    # print(indexes)
-    # names = [''] * len(assigned_types)
-    # for i in range(len(assigned_types)):
-    #    names[i] = assigned_types[i] + str(indexes[assigned_types[i]])
-    #    indexes[assigned_types[i]] += 1
-    # return names
     names, indexes = rename_nodes_idx(assigned_types, indexes, special_rename_type, explicit_values, add_prefix)
     return names
 
@@ -78,7 +71,6 @@ def rename_nodes(assigned_types, types, special_rename_type=None, explicit_value
 # Rename nodes combining Type and index and receiving initial index per type
 def rename_nodes_idx(assigned_types, indexes, special_rename_type=None, explicit_values=None, add_prefix=""):
     names = [''] * len(assigned_types)
-    # print(explicit_values)
     for i in range(len(assigned_types)):
         if assigned_types[i] == special_rename_type:
             names[i] = explicit_values[indexes[assigned_types[i]] - 1]
@@ -152,7 +144,8 @@ def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, mac
                              nc.XLS_CAPACITY_GBPS: link_capacities}
                             )
     if os.path.isfile(file):
-        res, message, nodes_df, links_df = merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df, coord_type)
+        res, message, nodes_df, links_df = merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df,
+                                                                    coord_type)
         if not res:
             return res, message
         with pd.ExcelWriter(file, engine='openpyxl') as writer:
@@ -195,9 +188,9 @@ def merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df, c
         return False, texts.METRO_CORE_CONFLICT, nodes_df, links_df
 
     # We are creating a metro core network and one of the nodes already exists (probably mapped from
-    # the backbone network. Let's add information related to the coordinates and update other fields
+    # the backbone network). Let's add information related to the coordinates and update other fields
     if coord_type == nc.METRO_CORE and len(same) > 0:
-       #nc.XLS_X_MCORE, nc.XLS_Y_MCORE]
+        # nc.XLS_X_MCORE, nc.XLS_Y_MCORE]
         for name in same[nc.XLS_NODE_NAME]:
             # TODO read all at once and write them together
             hh = nodes_df.loc[nodes_df[nc.XLS_NODE_NAME] == name, nc.XLS_HOUSE_H].iloc[0]
@@ -252,7 +245,7 @@ def count_distance_ranges(distances, upper_limits):
 
 
 # Assign types to graph nodes based on type proportions
-def backbone_assign_types(graph, types):
+'''def backbone_assign_types(graph, types):
     # Generate k random values with the weight frequencies of degrees
     sequence = random.choices(types.code, weights=types.proportion, k=len(graph.nodes))
     return sequence
@@ -264,7 +257,7 @@ def metro_assign_types(types):
     sequence = [code for code, val in types[['code', 'number']].values for _ in range(val)]
     # Generate k random values with the weight frequencies of degrees
     random.shuffle(sequence)
-    return sequence
+    return sequence'''
 
 
 def set_missing_types_colors(assigned_types, dict_colors: dict):
@@ -279,52 +272,6 @@ def set_missing_types_colors(assigned_types, dict_colors: dict):
 def color_nodes(assigned_types, dict_colors):
     dict_colors = set_missing_types_colors(assigned_types, dict_colors)
     return [dict_colors[assigned_type] for assigned_type in assigned_types]
-
-
-# TODO: Matching types, but not checking degrees.
-# Strategy 1: Relabel 2 nodes to match other existing ones with the same type
-# See also connect_sub_metro_regions
-def match_sub_metro_region(topo_nodes, assigned_types, sub_topo_nodes, sub_topo_types):
-    # relabelled = [val + len(topo_nodes)-2 for val in sub_topo_nodes]
-    relabelled = [val + len(topo_nodes) for val in sub_topo_nodes]
-    type_1 = sub_topo_types[0]
-    idx_1 = assigned_types.index(type_1)
-    type_2 = sub_topo_types[1]
-    idx_2 = assigned_types.index(type_2, idx_1 + 1)
-    result = [idx_1, idx_2]
-    result.extend(relabelled[2:(len(relabelled))])
-    # print(result)
-    return result, sub_topo_types[2:]
-
-
-# Strategy 2: Connect nodes to other existing ones. Increase degrees.
-# See also match_sub_metro_regions
-def connect_sub_metro_regions(topology, sub_topology, min_degree):
-    indexes = []
-    low_degree = min_degree
-    while True:
-        temp = [index for index, element in topology.degree if element <= low_degree]
-        indexes.extend(temp)
-        if len(indexes) > 1:
-            break
-        low_degree += 1
-    topo_cons = random.sample(indexes, k=2)
-    relabelled = [val + len(topology.nodes) for val in sub_topology.nodes]
-
-    indexes = []
-    while True:
-        temp = [index + len(topology.nodes) for index, element in sub_topology.degree if element == low_degree]
-        indexes.extend(temp)
-        if len(indexes) > 1:
-            break
-        low_degree += 1
-    subtopo_cons = random.sample(indexes, k=2)
-
-    sub_topology = nx.relabel_nodes(sub_topology, dict(zip(sub_topology.nodes, relabelled)))
-    topology = nx.union(topology, sub_topology)
-    topology.add_edge(topo_cons[0], subtopo_cons[0])
-    topology.add_edge(topo_cons[1], subtopo_cons[1])
-    return topology
 
 
 def format_distance_limits(distances, upper_limits):
