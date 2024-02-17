@@ -1,25 +1,25 @@
-import matplotlib
 import networkx as nx
-import numpy as np
 from matplotlib import pyplot as plt
 import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import networkconstants
-from generator import write_network, format_node_list, \
-    metro_aggregation_horseshoe
+from MetroAggGenerator import MetroAggGenerator, DefaultMetroAggGenerator
+from generator import write_network, format_node_list
 import pandas as pd
 
 
 # Class for the Tkinter Topology Generator Application
 class MetroAggGenApp:
+    metro_agg_gen: MetroAggGenerator
 
     # length_ranges - ranges of lengths for each hop in the aggregation ring
     # length_percentages - % of hops in the horseshoe within the related range
     # dict_colors - dictionary that maps types to colors for the basic graph
     def __init__(self, length_ranges, length_percentages, dict_colors={}):
 
+        self.metro_agg_gen = DefaultMetroAggGenerator()
         self.lengths = length_ranges
         self.l_perc = length_percentages
         # Color codes depending on the type
@@ -194,7 +194,7 @@ class MetroAggGenApp:
         destination = destination_combo.get()
 
         if source == "-" or source == "" or destination == "-" or destination == "":
-            print ("source or destination not selected")
+            print("source or destination not selected")
             return
 
         hops = int(self.root.nametowidget("notebook_gen.source_frame.from_file.hops").get())
@@ -202,10 +202,10 @@ class MetroAggGenApp:
 
         (self.topo, self.distances, self.assigned_types, self.pos, self.colors,
          self.national_ref_nodes) = \
-            metro_aggregation_horseshoe(source, 1, destination, hops,
-                                        self.lengths,
-                                        self.l_perc,
-                                        prefix, self.color_codes)
+            self.metro_agg_gen.metro_aggregation_horseshoe(source, 1, destination, hops,
+                                                           self.lengths,
+                                                           self.l_perc,
+                                                           prefix, self.color_codes)
 
         self.figure = plt.Figure(figsize=(self.fig_width, self.fig_height), dpi=50)
         print(self.fig_width, self.fig_height)

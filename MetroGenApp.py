@@ -35,6 +35,8 @@ class MetroGenApp:
         self.cluster_list = ["-"]
         # Clusters of nodes will be filled if read from file
         self.nodes_clusters = {}
+        # All the node info read from the files and stored into a Dataframe
+        self.nodes_from_files = None
         # Variable to hold the default figure
         self.figure = None
         # Root component
@@ -300,14 +302,23 @@ class MetroGenApp:
                 old_canvas = i
                 break
         old_canvas.destroy()
-        # Retrieve information about source of nodes (input or file)
+        # Get the information of the nodes introduced by the user in the list of reference national nodes
+        # when writing them in the GUI. They have priority over the number of national nodes.
         node_ref_number = self.node_refs
+        # Get which cluster is selected in the Combo, either "-" or an actual cluster from file
         selected_cluster_from_file = self.root.nametowidget("notebook_gen.source_frame.from_file.cluster")
         selected_cluster = selected_cluster_from_file.get()
 
+        extra_node_info = None
+        # If a cluster is selected and the Load from file option is marked
         if selected_cluster != "-" and self.radio_val.get() == "1":
+            # Replace the nodes from the GuI by the nodes for the selected cluster that were read from file
             node_ref_number = self.nodes_clusters[int(selected_cluster)]
+            # Get all the info for those nodes
+            extra_node_info = self.nodes_from_files.loc[self.nodes_from_files['node_name'].isin(node_ref_number)]
+            # If the user selected to create a ring structure instead of a mesh structure
             if self.ring_var.get():
+                # Get the expected number of rings in the structure and generate it
                 ring_size = self.root.nametowidget("notebook_gen.source_frame.from_file.ring_size")
                 (self.topo, self.distances, self.assigned_types, self.pos, self.colors,
                  self.national_ref_nodes) = \
@@ -316,28 +327,29 @@ class MetroGenApp:
                                                  node_ref_number[1],
                                                  prefix="R" + selected_cluster + "-",
                                                  dict_colors=self.color_codes)
-        # print(node_ref_number)
 
+        # Only if the user selected the mesh option (either introducing the info at the GUI
+        # or mapping a cluster read from file to a Mesh and not to a ring)
         if self.radio_val.get() == "0" or not self.ring_var.get():
             # Types and percentages for the nodes
             type_key_vals = type_list.get_entries()
             # Build the expected data structure
             types = pd.DataFrame({'code': [key for key, value in type_key_vals],
                                   'proportion': [float(value) for key, value in type_key_vals]})
-
+            # Calculate the sum of values for proportions as it might not be 100%
             total_proportion = sum(types.proportion)
+            # Get a number of nodes per code based on the actual proportion and the total number
+            # of nodes and rounding to the nearest integer.
             total = np.rint(int(node_number.get()) * types.proportion / total_proportion)
             types["number"] = total.astype(int)
 
-            # if self.radio_val.get() == "1"
-            #    node_ref_number
-
+            # Types defined by the user might not include national nodes
+            # But they might have included reference nodes either in the GUI list or read from file
             if nc.NATIONAL_CO_CODE in list(types['code']):
-                # types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(self.node_refs)
                 types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(node_ref_number)
             else:
-                '''row = {'code': nc.NATIONAL_CO_CODE, 'proportion': len(self.node_refs) / int(node_number.get()),
-                       'number': len(self.node_refs)}'''
+                # If the user defined the NCO type, the proportion and values need to be re-writen to match
+                # the reference nodes. TODO: consider if BB clusters read from file include other types of nodes
                 row = {'code': nc.NATIONAL_CO_CODE, 'proportion': len(node_ref_number) / int(node_number.get()),
                        'number': len(node_ref_number)}
                 types = pd.concat([types, pd.DataFrame([row])], ignore_index=True)
@@ -360,7 +372,7 @@ class MetroGenApp:
             # Call the metro function with the expected parameters
             self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
                 self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
-                                             algorithm, node_ref_number, add_prefix)
+                                             algorithm, node_ref_number, add_prefix, extra_node_info)
             self.national_ref_nodes = ["" for i in self.topo.nodes]
         # Get x and y coordinates for all the elements
         x_pos = [pos[0] for pos in list(self.pos.values())]
@@ -436,12 +448,13 @@ class MetroGenApp:
             # links_df = pd.read_excel(file_path, sheet_name="links")
             try:
                 clusters = nodes_df[nc.XLS_CLUSTER]
+                self.nodes_from_files = nodes_df
             except KeyError:
                 print("No clusters found")
             # print("Number of clusters: ", len(set(clusters)))
             label = self.root.nametowidget("notebook_gen.source_frame.from_file.cluster_list")
             label['text'] = self.clusters_as_list_of_nodes(nodes_df['node_name'], clusters)
-        return nodes_df
+        return
 
     def clusters_as_list_of_nodes(self, names, clusters):
         names_clusters = set(clusters)

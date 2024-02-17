@@ -14,10 +14,10 @@ class MetroCoreGenerator(ABC):
     # dict_colors: color assigned per type
     # algo: algorithm to create the distribution (spectral, kamada...)
     # national_nodes: list of national nodes if defined
-    # add_prefix: additional prefix to incorporate to each non national node
+    # add_prefix: additional prefix to incorporate to each non-national node
     @abstractmethod
     def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
-                      national_nodes=[], add_prefix=""):
+                      national_nodes=[], add_prefix="", extra_node_info=None):
         pass
 
     # Function to define the parameters for the ring Metro-regional networks
@@ -43,10 +43,7 @@ class MetroCoreGenerator(ABC):
 class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
     def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
-                      national_nodes=[], add_prefix=""):
-
-        node_sheet = "Nodes"
-        link_sheet = "Links"
+                      national_nodes=[], add_prefix="", extra_node_info=None):
 
         # Split the generation into subnets so the connections are balanced for each region
         # With a NCO
@@ -135,7 +132,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
         # Assign types to nodes
         assigned_types = MetroCoreGenerator.metro_assign_types(pd.DataFrame({'code': types.code,
-                                                          'number': subnet_number}))
+                                                               'number': subnet_number}))
 
         return topo, assigned_types
 
@@ -190,7 +187,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
                                     })
         # Actual creation of rings
         return self.create_ring_network_tel(n_rings, ring_config, end_1, end_2,
-                                       prefix, initial_index, variability, dict_colors)
+                                            prefix, initial_index, variability, dict_colors)
 
         # Function to create ring Metro-regional networks
         # n_rings number of rings in the structure (1, 2, 3, 4 or 6)
@@ -298,7 +295,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
         return ring, distances, types, pos_loc, color_map, reference_node
 
-    # Correct negative length of the final link by reducing it propotionally
+    # Correct negative length of the final link by reducing it proportionally
     # from the rest of the links
     def correct_negative_pending(self, link_lengths, pending_length, offices):
         if pending_length < 0:
