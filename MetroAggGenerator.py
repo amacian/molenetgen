@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 import networkconstants as nc
 import random
 import networkx as nx
-from network import color_nodes, write_network_xls_plus
+from network import color_nodes
 import numpy as np
-from matplotlib import pyplot as plt
 
 
 class MetroAggGenerator(ABC):
@@ -12,8 +11,7 @@ class MetroAggGenerator(ABC):
     def metro_aggregation_horseshoe(self, initial_rco_name,
                                     initial_lco_idx, final_rco_name,
                                     hops, length_ranges,
-                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={},
-                                    filename=None):
+                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={}):
         pass
 
 
@@ -23,12 +21,8 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
     def metro_aggregation_horseshoe(self, initial_rco_name,
                                     initial_lco_idx, final_rco_name,
                                     hops, length_ranges,
-                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={},
-                                    filename=None):
-        # Sheet names in the Excel file for nodes and links
-        node_sheet = "Nodes"
-        link_sheet = "Links"
-
+                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={}):
+        default_type = nc.LOCAL_CO_CODE
         # The number of local offices is 1 element less than number of hops
         n_local_offices = hops - 1
         # select one of the ranges from the distances based on the weight defined by percentage
@@ -59,7 +53,7 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
             # Set this node as the previous node for the next iteration
             previous_node = name
             # Append the type to the list of node types
-            types.append(prefix)
+            types.append(default_type)
 
         # Add the final RCO
         horseshoe.add_node(final_rco_name)
@@ -87,10 +81,6 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
         # Add the distance as a label for the nodes
         nx.draw_networkx_edge_labels(horseshoe, edge_labels=dict(zip(horseshoe.edges, distances)),
                                      pos={key: np.array([value, 0]) for key, value in zip(horseshoe.nodes, positions)})
-        # And save the file
-        if filename is not None:
-            plt.savefig(filename + ".png")
-        # plt.figure().clear()
 
         # Add the distances as an edge attribute for the nodes
         nx.set_edge_attributes(horseshoe, dict(zip(horseshoe.edges, distances)), 'weight')
@@ -111,8 +101,6 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
         # Remove the dummy node (and the edges automatically)
         horseshoe.remove_node('Dummy')
         # Write Excel file
-        if filename is not None:
-            write_network_xls_plus(filename, horseshoe, distances, types, node_sheet,
-                                   link_sheet, reference_node)
+
         pos = {key: np.array([value, 0]) for key, value in zip(horseshoe.nodes, positions)}
         return horseshoe, distances, types, pos, colors, reference_node

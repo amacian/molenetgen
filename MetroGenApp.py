@@ -42,7 +42,7 @@ class MetroGenApp:
         # Root component
         self.root = tk.Tk()
         self.root.geometry("800x800")
-        self.root.title("Metro Core Topology Generator")
+        self.root.title("MoleNetwork Metro Core Topology Generator")
         # Value that holds if the single clusters should be removed
         self.remove_single_clusters = tk.BooleanVar(self.root)
         # Color codes depending on the type

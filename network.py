@@ -89,10 +89,16 @@ def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, mac
     x_coord_m_core = [0.00] * len(graph.nodes)
     y_coord_m_core = [0.00] * len(graph.nodes)
 
+    regional_ref_nodes = [val for val in graph.nodes]
+
     match coord_type:
         case nc.METRO_CORE:
             x_coord_m_core = x_coord
             y_coord_m_core = y_coord
+        case nc.METRO_AGGREGATION:
+            if reference_nodes is not None:
+                regional_ref_nodes = reference_nodes
+                reference_nodes = [''] * len(graph.nodes)
         case _:
             x_coord_back = x_coord
             y_coord_back = y_coord
@@ -125,7 +131,7 @@ def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, mac
 
     nodes_df = pd.DataFrame({nc.XLS_NODE_NAME: [val for val in graph.nodes],
                              nc.XLS_CO_TYPE: types,
-                             nc.XLS_REF_RCO: [val for val in graph.nodes],
+                             nc.XLS_REF_RCO: regional_ref_nodes,  # [val for val in graph.nodes],
                              nc.XLS_REF_NCO: reference_nodes,
                              nc.XLS_HOUSE_H: households,
                              nc.XLS_MACRO_C: macro_cells,
@@ -168,6 +174,14 @@ def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, mac
     return True, ""
 
 
+# When creating s network, a node might belong to backbone, metro core and metro aggregation networks
+# Read and update the information already available at the file so it can be written altogether
+# file: filename to be read
+# node_sheet: name of the excel sheet for nodes
+# link_sheet: name of the excel sheet for links
+# nodes_df: data frame with nodes
+# links_df: data frame with links
+# coord_type: type of segment being created (backbone, metro core, metro aggregation).
 def merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df, coord_type):
     ex_nodes = pd.read_excel(file, node_sheet, engine="openpyxl")
     existing_links = pd.read_excel(file, link_sheet, engine="openpyxl")
@@ -177,16 +191,33 @@ def merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df, c
     same_links = pd.merge(link_ids, links_df, on=[nc.XLS_SOURCE_ID, nc.XLS_DEST_ID])
 
     if len(same_links) > 0:
-        return False, texts.LINK_EXISTS, nodes_df
+        return False, texts.LINK_EXISTS, nodes_df, links_df
 
     # We are generating a backbone network, but there is already one defined
     if coord_type == nc.BACKBONE and max(ex_nodes[nc.XLS_X_BACK]) > 0:
-        return False, texts.BACKBONE_EXISTS, nodes_df
+        return False, texts.BACKBONE_EXISTS, nodes_df, links_df
 
     # We are generating a metro core network but the node was already used for another macro region
     if coord_type == nc.METRO_CORE and max(same[nc.XLS_X_MCORE]) > 0:
         return False, texts.METRO_CORE_CONFLICT, nodes_df, links_df
 
+    if coord_type == nc.METRO_AGGREGATION:
+        first_lco = nodes_df[nc.XLS_NODE_NAME][1]
+        if first_lco in same[nc.XLS_NODE_NAME]:
+            return False, texts.METRO_AGG_CONFLICT, nodes_df, links_df
+        first_regional = nodes_df[nc.XLS_NODE_NAME][0]
+        last_regional = nodes_df[nc.XLS_NODE_NAME][len(nodes_df) - 1]
+        print(first_regional, last_regional, same[nc.XLS_NODE_NAME])
+        if first_regional in list(same[nc.XLS_NODE_NAME]):
+            first_regional_ref_nco = ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == first_regional, nc.XLS_REF_NCO].iloc[0]
+            nodes_df.loc[nodes_df[nc.XLS_REF_RCO] == first_regional, nc.XLS_REF_NCO] = first_regional_ref_nco
+            print(nodes_df) # TODO: Check
+            nodes_df = nodes_df[nodes_df[nc.XLS_NODE_NAME] != first_regional]
+            print(nodes_df)
+        if last_regional in list(same[nc.XLS_NODE_NAME]):
+            last_regional_ref_nco = ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == last_regional, nc.XLS_REF_NCO].iloc[0]
+            nodes_df.loc[nodes_df[nc.XLS_REF_RCO] == last_regional, nc.XLS_REF_NCO] = last_regional_ref_nco
+            nodes_df = nodes_df[nodes_df[nc.XLS_NODE_NAME] != last_regional]
     # We are creating a metro core network and one of the nodes already exists (probably mapped from
     # the backbone network). Let's add information related to the coordinates and update other fields
     if coord_type == nc.METRO_CORE and len(same) > 0:

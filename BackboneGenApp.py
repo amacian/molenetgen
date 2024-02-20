@@ -31,7 +31,7 @@ class BackboneGenApp:
     def __init__(self, degrees, weights, nodes, upper_limits, types, dict_colors={}):
         # Store the distance ranges and the max distance value
         self.upper_limits = upper_limits
-        self.max_upper=max(self.upper_limits)
+        self.max_upper = max(self.upper_limits)
         # Backbone generator object
         self.back_gen = DefaultBackboneGenerator()
         # Cluster generator object
@@ -149,21 +149,41 @@ class BackboneGenApp:
         canvas = FigureCanvasTkAgg(self.figure, master=frame)
         canvas_widget = canvas.get_tk_widget()
 
-        # Add the Tkinter canvas to the window
-        # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
-        # print(self.colors)
+        canvas_widget.grid(row=0, rowspan=7, column=0, sticky=tk.W + tk.N)
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
-        btn_set_distances = tk.Button(frame, text="Change distances", command=self.open_dist_window)
-        btn_set_distances.grid(row=1, column=0)
+
+        btn_set_distances = tk.Button(frame, text="Change \ndistances", command=self.open_dist_window)
+        btn_set_distances.grid(row=0, column=1, sticky=tk.N)
         label_printable = tk.Label(frame,
                                    text=format_distance_limits(self.distances, self.upper_limits),
                                    name="print_distances", anchor="w")
-        # label_printable.pack(side=tk.BOTTOM)
-        label_printable.grid(row=5, column=0, sticky=tk.S)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
+        label_printable.grid(row=1, column=1, sticky=tk.N)
+
+        # List of links
+        combo = ttk.Combobox(frame, name="link_list", state="readonly",
+                             values=["-"])
+        combo.current(0)
+        combo.grid(row=2, column=1)
+        self.fill_link_list_combo()
+        # Button to delete the selected link from the list
+        btn_del_link = tk.Button(frame, text="Del link", command=self.del_link)
+        btn_del_link.grid(row=3, column=1, sticky=tk.N)
+        combo_node = ttk.Combobox(frame, name="source_list", state="readonly",
+                             values=["-"])
+        combo_node.current(0)
+        combo_node.grid(row=4, column=1)
+        self.fill_node_source_combo()
+        combo_node.bind("<<ComboboxSelected>>", self.fill_node_dest_combo)
+        combo_dest = ttk.Combobox(frame, name="dest_list", state="readonly",
+                             values=["-"])
+        combo_dest.current(0)
+        combo_dest.grid(row=5, column=1)
+        # Button to add a link
+        btn_add_link = tk.Button(frame, text="Add link", command=self.add_link)
+        btn_add_link.grid(row=6, column=1, sticky=tk.N)
+        # frame.rowconfigure(0, weight=1)
+        # frame.columnconfigure(0, weight=1)
         return frame, canvas
 
     def create_tab_list(self, parent, key_names, value_names, node_names, frame_name, type_names,
@@ -257,18 +277,12 @@ class BackboneGenApp:
             self.back_gen = DefaultBackboneGenerator()
         else:
             self.back_gen = DualBackboneGenerator()
-        old_canvas = None
+
         # Types and percentages for the nodes
         type_key_vals = type_list.get_entries()
         # Build the expected data structure
         types = pd.DataFrame({'code': [key for key, value in type_key_vals],
                               'proportion': [float(value) for key, value in type_key_vals]})
-        # Find the old canvas for the image and destroy it
-        for i in frame.winfo_children():
-            if isinstance(i, tk.Canvas):
-                old_canvas = i
-                break
-        old_canvas.destroy()
 
         # Prepare the data of degrees and weights as expected by the backbone function
         key_values = degree_list.get_entries()
@@ -287,47 +301,7 @@ class BackboneGenApp:
             self.node_sheet, self.link_sheet, self.pos, self.colors = \
             self.back_gen.generate(degrees, weights, nodes, self.upper_limits, types, algorithm.get(),
                                    self.color_codes)
-
-        # Get x and y coordinates for all the elements
-        x_pos = [pos[0] for pos in list(self.pos.values())]
-        y_pos = [pos[1] for pos in list(self.pos.values())]
-        # Calculate the horizontal and vertical size of the image
-        x_size = max(x_pos) - min(x_pos)
-        y_size = max(y_pos) - min(y_pos)
-
-        # y_size will be kept always as 10 while x_size is resized to keep proportions
-        if x_size > y_size:
-            y_size = y_size * 12 / x_size
-            x_size = 12
-        else:
-            x_size = x_size * 12 / y_size
-            y_size = 12
-
-        # size_ratio = x_size / self.fig_width
-        # Change the figure width based on this and prepare the canvas and widgets
-        self.fig_width = x_size
-        self.figure = plt.Figure(figsize=(x_size, y_size),
-                                 tight_layout=True, dpi=50)
-        ax = self.figure.add_subplot(111)
-        canvas = FigureCanvasTkAgg(self.figure, master=frame)
-        canvas_widget = canvas.get_tk_widget()
-
-        # canvas_widget.config(width=x_size, height=y_size)
-        # Add the Tkinter canvas to the window
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
-        # Draw the figure
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
-        # Retrieve the reference to the label where distance ranges and proportions are drawn
-        output_label = frame.nametowidget("print_distances")
-        output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
-        # Call to the creation of the grouping/cluster graph with existing values
-        self.group_graph()
-        # Resize the whole window as the graph width changed
-        # root_y = self.root.winfo_height()  # round(y_size*60)+output_label.winfo_height()
-        # root_x = self.root.winfo_width() * size_ratio
-        # print(root_x, ";", root_y)
-        # self.root.geometry(f'{round(root_x)}x{round(root_y)}')
+        self.update_image_frame()
 
     # Regenerate the group graph
     def group_graph(self):
@@ -336,8 +310,10 @@ class BackboneGenApp:
         # Find the combo that defines the Clustering method
         cluster_alg = self.root.nametowidget("notebook_gen.group_tab.algo_cluster")
         match cluster_alg.get():
-            case "By distance only": self.cluster_gen = DistanceBasedClusterGenerator()
-            case _: self.cluster_gen = DistanceConnectedBasedClusterGenerator()
+            case "By distance only":
+                self.cluster_gen = DistanceBasedClusterGenerator()
+            case _:
+                self.cluster_gen = DistanceConnectedBasedClusterGenerator()
         # Call the function that generates the tab
         groups, self.clusters = self.cluster_gen.find_groups(self.topo, self.assigned_types, self.pos,
                                                              eps=float(combo.get()),
@@ -382,11 +358,119 @@ class BackboneGenApp:
         # Detroy the canvas
         old_canvas.destroy()
 
+    # Open the window that will modify the distance ranges.
     def open_dist_window(self):
         if self.setter is None:
             self.setter = DistanceSetterWindow(self, self.root, self.upper_limits)
         else:
             self.setter.show(self.upper_limits)
+
+
+    # Method to repaint the image frame with the new image
+    def update_image_frame(self):
+        old_canvas = None
+
+        frame = self.root.nametowidget("notebook_gen.image_frame")
+        # Find the old canvas for the image and destroy it
+        for i in frame.winfo_children():
+            if isinstance(i, tk.Canvas):
+                old_canvas = i
+                break
+        old_canvas.destroy()
+
+        # Get x and y coordinates for all the elements
+        x_pos = [pos[0] for pos in list(self.pos.values())]
+        y_pos = [pos[1] for pos in list(self.pos.values())]
+        # Calculate the horizontal and vertical size of the image
+        x_size = max(x_pos) - min(x_pos)
+        y_size = max(y_pos) - min(y_pos)
+
+        # y_size will be kept always as 10 while x_size is resized to keep proportions
+        if x_size > y_size:
+            y_size = y_size * 12 / x_size
+            x_size = 12
+        else:
+            x_size = x_size * 12 / y_size
+            y_size = 12
+
+        # size_ratio = x_size / self.fig_width
+        # Change the figure width based on this and prepare the canvas and widgets
+        self.fig_width = x_size
+        self.figure = plt.Figure(figsize=(x_size, y_size),
+                                 tight_layout=True, dpi=50)
+        ax = self.figure.add_subplot(111)
+        canvas = FigureCanvasTkAgg(self.figure, master=frame)
+        canvas_widget = canvas.get_tk_widget()
+
+        # canvas_widget.config(width=x_size, height=y_size)
+        # Add the Tkinter canvas to the window
+        canvas_widget.grid(row=0, column=0, rowspan=7, sticky=tk.W + tk.N)
+        # Draw the figure
+        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+                node_color=self.colors, ax=ax)
+        # Retrieve the reference to the label where distance ranges and proportions are drawn
+        output_label = frame.nametowidget("print_distances")
+        output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
+        # Call to the creation of the grouping/cluster graph with existing values
+        self.group_graph()
+        self.fill_link_list_combo()
+        self.fill_node_source_combo()
+        self.fill_node_dest_combo(None)
+
+    # Method to fill the link list combo
+    def fill_link_list_combo(self):
+        combo = self.root.nametowidget("notebook_gen.image_frame.link_list")
+        edges = list(self.topo.edges)
+        edges.insert(0, "-")
+        combo["values"] = edges
+        combo.set("-")
+
+    # Fill the node source combo with all the nodes from the topology
+    def fill_node_source_combo(self):
+        combo = self.root.nametowidget("notebook_gen.image_frame.source_list")
+        nodes = list(self.topo.nodes)
+        nodes.sort()
+        nodes.insert(0, "-")
+        combo["values"] = nodes
+        combo.set("-")
+
+    # Fill with all the nodes not already connected to this one
+    def fill_node_dest_combo(self, event):
+        combo_src = self.root.nametowidget("notebook_gen.image_frame.source_list")
+        combo = self.root.nametowidget("notebook_gen.image_frame.dest_list")
+        selected_node = combo_src.get()
+        values = []
+        if selected_node != "_":
+            existing_linked_nodes = [v for u,v in self.topo.edges(selected_node)]
+            values = [i for i in self.topo.nodes if i not in existing_linked_nodes and i != selected_node]
+            values.sort()
+        values.insert(0, "-")
+        combo["values"] = values
+        combo.set("-")
+
+    # Delete the selected link from the graph
+    def del_link(self):
+        combo = self.root.nametowidget("notebook_gen.image_frame.link_list")
+        selected = combo.get()
+        if selected == "-":
+            tk.messagebox.showerror("", "No link selected")
+            return
+
+        nodes = selected.split(" ")
+        self.topo.remove_edge(nodes[0], nodes[1])
+        self.update_image_frame()
+        return
+
+    def add_link(self):
+        combo_src = self.root.nametowidget("notebook_gen.image_frame.source_list")
+        combo = self.root.nametowidget("notebook_gen.image_frame.dest_list")
+        source_node = combo_src.get()
+        dest_node = combo.get()
+        if source_node == "-" or dest_node == "-":
+            tk.messagebox.showerror("", "No link selected")
+            return
+        self.topo.add_edge(source_node, dest_node)
+        self.update_image_frame()
 
     def set_distance_parameters(self):
         self.distances = calculate_edge_distances(self.topo, self.pos, self.max_upper)
@@ -403,4 +487,3 @@ class BackboneGenApp:
         # Update the description of % per link
         output_label = self.root.nametowidget("notebook_gen.image_frame.print_distances")
         output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
-

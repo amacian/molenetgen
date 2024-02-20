@@ -4,7 +4,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-import networkconstants
+import Texts_EN as texts
+import networkconstants as nc
 from MetroAggGenerator import MetroAggGenerator, DefaultMetroAggGenerator
 from generator import write_network, format_node_list
 import pandas as pd
@@ -18,7 +19,7 @@ class MetroAggGenApp:
     # length_percentages - % of hops in the horseshoe within the related range
     # dict_colors - dictionary that maps types to colors for the basic graph
     def __init__(self, length_ranges, length_percentages, dict_colors={}):
-
+        self.topo = None
         self.metro_agg_gen = DefaultMetroAggGenerator()
         self.lengths = length_ranges
         self.l_perc = length_percentages
@@ -32,7 +33,7 @@ class MetroAggGenApp:
         # Root component
         self.root = tk.Tk()
         self.root.geometry("800x800")
-        self.root.title("Metro Aggregation Topology Generator")
+        self.root.title("MoleNetwork Metro Aggregation Topology Generator")
         # Value that holds if the single clusters should be removed
         self.remove_single_clusters = tk.BooleanVar(self.root)
         # Color codes depending on the type
@@ -87,9 +88,16 @@ class MetroAggGenApp:
     def save_to_file(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".xlsx",
                                                  filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")])
+        result = False
+        message = texts.FILE_NOT_FOUND
         if file_path:
-            write_network(file_path, self.topo, self.distances, self.assigned_types, self.figure,
-                          pos=self.pos, reference_nodes=self.national_ref_nodes)
+            result, message = write_network(file_path, self.topo, self.distances, self.assigned_types, self.figure,
+                                            pos=self.pos, reference_nodes=self.national_ref_nodes,
+                                            type_nw=nc.METRO_AGGREGATION)
+        if not result:
+            tk.messagebox.showerror('', message)
+        else:
+            tk.messagebox.showinfo('', texts.COMPLETED)
 
     def create_tab_save(self, parent):
         frame = ttk.Frame(parent)
@@ -139,17 +147,23 @@ class MetroAggGenApp:
 
     # Action to be run whenever a cluster is selected to generate a topology
     def node_selected(self, event):
+        # Get the selected node from the combo
         selected_node_from_file = self.root.nametowidget("notebook_gen.source_frame.from_file.node")
         selected_node = selected_node_from_file.get()
-        print(selected_node)
+        # Get the list of edges read from the file
         links = self.links_list
+        # Select only those where the selected node is involved and pick the other end
         filtered = links[links["sourceID"] == selected_node]
         nodes = filtered["destinationID"]
         filtered = links[links["destinationID"] == selected_node]
         nodes = pd.concat([nodes, filtered["sourceID"]], ignore_index=True)
+        # Fill the other combo with this values
         related_nodes = self.root.nametowidget("notebook_gen.source_frame.from_file.linked_nodes")
         related_nodes['state'] = "normal"
-        related_nodes['values'] = list(nodes)
+        vals = list(nodes)
+        vals.insert(0, "-")
+        related_nodes['values'] = vals
+        related_nodes.set("-")
 
     def create_tab_image(self, parent):
         frame = ttk.Frame(parent, name="image_frame")
@@ -160,21 +174,7 @@ class MetroAggGenApp:
         canvas_widget = canvas.get_tk_widget()
 
         # Add the Tkinter canvas to the window
-        # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
         canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
-        # print(self.colors)
-        '''nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
-
-        label_printable = tk.Label(frame,
-                                   text=format_distance_limits(self.distances, self.upper_limits),
-                                   name="print_distances", anchor="w")
-        # label_printable.pack(side=tk.BOTTOM)
-        label_printable.grid(row=2, column=0, sticky=tk.S)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)'''
-        # return frame, canvas
         return frame
 
     def metro_aggregation(self, frame):
@@ -198,7 +198,7 @@ class MetroAggGenApp:
             return
 
         hops = int(self.root.nametowidget("notebook_gen.source_frame.from_file.hops").get())
-        prefix = networkconstants.LOCAL_CO_CODE + "_" + source + "_" + destination + "_"
+        prefix = nc.LOCAL_CO_CODE + "_" + source + "_" + destination + "_"
 
         (self.topo, self.distances, self.assigned_types, self.pos, self.colors,
          self.national_ref_nodes) = \
@@ -208,7 +208,6 @@ class MetroAggGenApp:
                                                            prefix, self.color_codes)
 
         self.figure = plt.Figure(figsize=(self.fig_width, self.fig_height), dpi=50)
-        print(self.fig_width, self.fig_height)
         ax = self.figure.add_subplot(111)
         canvas = FigureCanvasTkAgg(self.figure, master=frame)
         canvas_widget = canvas.get_tk_widget()
@@ -247,4 +246,3 @@ class MetroAggGenApp:
             combo_node = self.root.nametowidget("notebook_gen.source_frame.from_file.node")
             node_names.sort()
             combo_node["values"] = node_names
-            print(node_names)
