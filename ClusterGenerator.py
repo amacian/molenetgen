@@ -168,7 +168,6 @@ class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
             # index in the original coord array to associate the cluster
             pos_other = pos_connected[int(res[1])]
 
-
             # Retrieve the cluster label of the nearest node and reassign the single node to that cluster
             cluster_labels[pos_node] = cluster_labels[pos_other]
             # Update that position of the cluster dictionary adding the single node

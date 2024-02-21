@@ -19,7 +19,7 @@ def gen_topology(degrees, weights, nodes):
         min_degree_idx = 0
         min_degree = 1000
         updated = False
-        # TODO Keep the smallest degree just in case there is not any with degrees[0]
+
         for i in range(len(sequence)):
             # Look for the first element with the smallest degree value and increase it, then break
             if sequence[i] == degrees[0]:
@@ -207,13 +207,10 @@ def merge_data_frames_to_xls(file, node_sheet, link_sheet, nodes_df, links_df, c
             return False, texts.METRO_AGG_CONFLICT, nodes_df, links_df
         first_regional = nodes_df[nc.XLS_NODE_NAME][0]
         last_regional = nodes_df[nc.XLS_NODE_NAME][len(nodes_df) - 1]
-        print(first_regional, last_regional, same[nc.XLS_NODE_NAME])
         if first_regional in list(same[nc.XLS_NODE_NAME]):
             first_regional_ref_nco = ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == first_regional, nc.XLS_REF_NCO].iloc[0]
             nodes_df.loc[nodes_df[nc.XLS_REF_RCO] == first_regional, nc.XLS_REF_NCO] = first_regional_ref_nco
-            print(nodes_df) # TODO: Check
             nodes_df = nodes_df[nodes_df[nc.XLS_NODE_NAME] != first_regional]
-            print(nodes_df)
         if last_regional in list(same[nc.XLS_NODE_NAME]):
             last_regional_ref_nco = ex_nodes.loc[ex_nodes[nc.XLS_NODE_NAME] == last_regional, nc.XLS_REF_NCO].iloc[0]
             nodes_df.loc[nodes_df[nc.XLS_REF_RCO] == last_regional, nc.XLS_REF_NCO] = last_regional_ref_nco

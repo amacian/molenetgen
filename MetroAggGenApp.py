@@ -236,8 +236,8 @@ class MetroAggGenApp:
         file_path = filedialog.askopenfilename(title="Open Topology", defaultextension=".xlsx",
                                                filetypes=[("Excel files", ".xlsx .xls")])
         if file_path:
-            nodes_df = pd.read_excel(file_path, sheet_name="nodes")
-            links_df = pd.read_excel(file_path, sheet_name="links")
+            nodes_df = pd.read_excel(file_path, sheet_name=nc.NODES_EXCEL_NAME)
+            links_df = pd.read_excel(file_path, sheet_name=nc.LINKS_EXCEL_NAME)
             self.nodes_list = nodes_df
             self.links_list = links_df
             label = self.root.nametowidget("notebook_gen.source_frame.from_file.node_list")

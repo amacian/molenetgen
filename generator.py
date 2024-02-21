@@ -2,9 +2,9 @@ from network import write_network_xls
 import networkconstants as nc
 
 
-def write_network(filename, topo, distances, assigned_types, figure, node_sheet="nodes", link_sheet="links",
-                  clusters=None, pos=None, reference_nodes=None, type_nw=nc.BACKBONE,
-                  alternative_figure_name=None):
+def write_network(filename, topo, distances, assigned_types, figure, node_sheet=nc.NODES_EXCEL_NAME,
+                  link_sheet=nc.LINKS_EXCEL_NAME, clusters=None, pos=None, reference_nodes=None,
+                  type_nw=nc.BACKBONE, alternative_figure_name=None):
     if alternative_figure_name is None:
         alternative_figure_name = filename + ".png"
     figure.savefig(alternative_figure_name)

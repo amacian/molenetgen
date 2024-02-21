@@ -444,7 +444,7 @@ class MetroGenApp:
         nodes_df = None
         clusters = []
         if file_path:
-            nodes_df = pd.read_excel(file_path, sheet_name="nodes")
+            nodes_df = pd.read_excel(file_path, sheet_name=nc.NODES_EXCEL_NAME)
             # links_df = pd.read_excel(file_path, sheet_name="links")
             try:
                 clusters = nodes_df[nc.XLS_CLUSTER]
