@@ -48,6 +48,8 @@ def process_single_ring_aggregation(ring_topo, horseshoe_sizes, generator, lengt
 
 
 if __name__ == '__main__':
+
+    directory = "/tmp/"
     # ** BACKBONE  ** #
     # The possible node degrees
     degrees = [2, 3, 4, 5]
@@ -96,7 +98,7 @@ if __name__ == '__main__':
     cluster_generator = DistanceBasedClusterGenerator()
     cluster_dict, cluster_labels = cluster_generator.find_groups(topo, assigned_types, pos,
                                                                  eps=0.05, avoid_single=True)
-    file_prefixes = "/Users/macian/Documents/test/" + str(time.time()) + "_"
+    file_prefixes = directory + str(time.time()) + "_"
 
     # Prepare the image to be stored
     plt.rcParams["figure.figsize"] = [3 * val for val in plt.rcParamsDefault["figure.figsize"]]
