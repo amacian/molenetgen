@@ -62,7 +62,8 @@ class BackboneGenApp:
             self.node_sheet, self.link_sheet, \
             self.pos, self.colors = self.back_gen.generate(degrees, weights, nodes,
                                                            self.upper_limits, types,
-                                                           dict_colors=dict_colors)
+                                                           dict_colors=dict_colors,
+                                                           max_distance=self.max_upper)
         # Variable to hold the assigned clusters
         self.clusters = None
 
@@ -302,7 +303,7 @@ class BackboneGenApp:
         self.topo, self.distances, self.assigned_types, \
             self.node_sheet, self.link_sheet, self.pos, self.colors = \
             self.back_gen.generate(degrees, weights, nodes, self.upper_limits, types, algorithm.get(),
-                                   self.color_codes)
+                                   self.color_codes, max_distance=self.max_upper)
         self.update_image_frame()
 
     # Regenerate the group graph
@@ -363,9 +364,9 @@ class BackboneGenApp:
     # Open the window that will modify the distance ranges.
     def open_dist_window(self):
         if self.setter is None:
-            self.setter = DistanceSetterWindow(self, self.root, self.upper_limits)
+            self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.max_upper)
         else:
-            self.setter.show(self.upper_limits)
+            self.setter.show(self.upper_limits, self.max_upper)
 
     # Method to repaint the image frame with the new image
     def update_image_frame(self):
@@ -476,13 +477,11 @@ class BackboneGenApp:
     def set_distance_parameters(self):
         self.distances = calculate_edge_distances(self.topo, self.pos, self.max_upper)
 
-    def set_upper_limits(self, upper_limits):
+    def set_upper_limits(self, upper_limits, max_distance):
         # variable for the upper limits of the distances.
         self.upper_limits = upper_limits
-        # Get the highest limit
-        up_helper = self.upper_limits[len(self.upper_limits) - 1]
         # Set the highest value to the point in the middle of the highest range
-        self.max_upper = up_helper - (up_helper - self.upper_limits[len(self.upper_limits) - 2]) / 2
+        self.max_upper = max_distance
         # Calculate distances based on this parameter
         self.set_distance_parameters()
         # Update the description of % per link

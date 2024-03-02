@@ -1,16 +1,21 @@
 import tkinter as tk
 import Texts_EN as tx
 
+
 class DistanceSetterWindow():
-    def __init__(self, generator, root, upper_limits):
+    def __init__(self, generator, root, upper_limits, max_distance):
         self.generator = generator
         self.window = None
         self.root = root
         self.list_distances = None
         self.entry_distance = None
-        self.create_window(upper_limits)
+        self.entry_max = None
+        self.var_max = None
+        self.create_window(upper_limits, max_distance)
 
-    def create_window(self, upper_limits):
+        print(self.var_max.get())
+
+    def create_window(self, upper_limits, max_distance):
         self.window = tk.Toplevel(self.root, name="top_distance")
         self.window.title("Set Upper Limits for Distance Ranges")
         self.window.geometry("400x300")
@@ -28,15 +33,21 @@ class DistanceSetterWindow():
         btn_add.grid(row=2, column=0)
         btn_remove = tk.Button(self.window, text="Remove", command=self.del_element)
         btn_remove.grid(row=2, column=1)
+        self.var_max = tk.StringVar()
+        self.var_max.set(max_distance)
+        self.entry_max = tk.Entry(self.window, name="entry_max", textvariable=self.var_max)
+        self.entry_max.grid(row=3, column=0, sticky=tk.N)
         btn_save = tk.Button(self.window, text="Save", command=self.save_and_close)
-        btn_save.grid(row=3, column=1)
+        btn_save.grid(row=4, column=1)
 
     def save_and_close(self):
         items = self.list_distances.get(0, tk.END)
-        if len(items)==0:
+        max_distance = int(self.var_max.get())
+        if len(items) == 0:
             tk.messagebox.showerror('', tx.EMPTY_LIST)
             return
-        self.generator.set_upper_limits(items)
+
+        self.generator.set_upper_limits(items, max_distance)
 
     def add_element(self):
         items = self.list_distances.get(0, tk.END)
@@ -62,4 +73,4 @@ class DistanceSetterWindow():
         return
 
     def show(self, upper_limits):
-        self.create_window(upper_limits)
+        self.create_window(upper_limits, max_distance)

@@ -16,13 +16,15 @@ class BackboneGenerator(ABC):
     # upper_limits: upper length limits for each range
     # types: available types of nodes and % per type
     @abstractmethod
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
+                 max_distance=None):
         pass
 
 
 class DefaultBackboneGenerator(BackboneGenerator):
 
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
+                 max_distance=None):
         # Sheet names in the Excel file for nodes and links
         node_sheet = nc.NODES_EXCEL_NAME
         link_sheet = nc.LINKS_EXCEL_NAME
@@ -71,12 +73,13 @@ class DefaultBackboneGenerator(BackboneGenerator):
             case _:
                 pos = nx.spectral_layout(topo)
 
-        # Calculate distance limits
-        max_upper = upper_limits[len(upper_limits) - 1]
-        # Modify the limits to approximate to the expected percentages per distance range
-        corrected_max_upper = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
+        if max_distance is None:
+            # Calculate distance limits
+            max_upper = upper_limits[len(upper_limits) - 1]
+            # Modify the limits to approximate to the expected percentages per distance range
+            max_distance = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
         # modify distances from the ones in the graph to the actual expected scale
-        distances = calculate_edge_distances(topo, pos, corrected_max_upper)
+        distances = calculate_edge_distances(topo, pos, max_distance)
         # print("Count distance per range:", count_distance_ranges(distances, upper_limits))
 
         # Generate a sequence of colors for each node depending on the type
@@ -88,7 +91,8 @@ class DefaultBackboneGenerator(BackboneGenerator):
 
 
 class DualBackboneGenerator(BackboneGenerator):
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
+                 max_distance=None):
         # Sheet names in the Excel file for nodes and links
         node_sheet = nc.NODES_EXCEL_NAME
         link_sheet = nc.LINKS_EXCEL_NAME
@@ -154,12 +158,13 @@ class DualBackboneGenerator(BackboneGenerator):
                                           topo,
                                           idx)
 
-        # Calculate distance limits
-        max_upper = upper_limits[len(upper_limits) - 1]
-        # Modify the limits to approximate to the expected percentages per distance range
-        corrected_max_upper = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
+        if max_distance is None:
+            # Calculate distance limits
+            max_upper = upper_limits[len(upper_limits) - 1]
+            # Modify the limits to approximate to the expected percentages per distance range
+            max_distance = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
         # modify distances from the ones in the graph to the actual expected scale
-        distances = calculate_edge_distances(topo, pos, corrected_max_upper)
+        distances = calculate_edge_distances(topo, pos, max_distance)
         # print("Count distance per range:", count_distance_ranges(distances, upper_limits))
 
         # Generate a sequence of colors for each node depending on the type
@@ -218,7 +223,8 @@ class WaxmanPavenGenerator(BackboneGenerator):
         self.alpha = alpha
         self.dist_factor = dist_factor
 
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
+                 max_distance=None):
         # Sheet names in the Excel file for nodes and links
         node_sheet = nc.NODES_EXCEL_NAME
         link_sheet = nc.LINKS_EXCEL_NAME
@@ -270,12 +276,14 @@ class WaxmanPavenGenerator(BackboneGenerator):
         name_nodes = rename_nodes(assigned_types, types)
         topo = nx.relabel_nodes(topo, dict(zip(topo.nodes, name_nodes)))
         pos = self.rename_position_indexed(pos, name_nodes)
-        # Calculate distance limits
-        max_upper = upper_limits[len(upper_limits) - 1]
-        # Modify the limits to approximate to the expected percentages per distance range
-        corrected_max_upper = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
+
+        if max_distance is None:
+            # Calculate distance limits
+            max_upper = upper_limits[len(upper_limits) - 1]
+            # Modify the limits to approximate to the expected percentages per distance range
+            max_distance = max_upper - (max_upper - upper_limits[len(upper_limits) - 2]) / 2
         # modify distances from the ones in the graph to the actual expected scale
-        distances = calculate_edge_distances(topo, pos, corrected_max_upper)
+        distances = calculate_edge_distances(topo, pos, max_distance)
         # print("Count distance per range:", count_distance_ranges(distances, upper_limits))
 
         # Generate a sequence of colors for each node depending on the type
