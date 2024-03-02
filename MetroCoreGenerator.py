@@ -298,7 +298,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
     # Correct negative length of the final link by reducing it proportionally
     # from the rest of the links
     def correct_negative_pending(self, link_lengths, pending_length, offices):
-        if pending_length < 0:
+        if pending_length <= 0:
             # print("Negative value detected for pending length.")
             # print(link_lengths, pending_length)
             updated_link_lengths = [val - abs(2 * pending_length) / offices for val in link_lengths]

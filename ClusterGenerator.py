@@ -129,7 +129,6 @@ class DistanceBasedClusterGenerator(ClusterGenerator):
 
 class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
     def merge_individual_clusters(self, nodes, pos, cluster_dict, cluster_labels, types, excluded_indices, topo):
-
         coord = [(pos[0], pos[1]) for pos, type_e in zip(list(pos.values()), types)]
         # set coordinates far away for the excluded indices, so they are not found as the nearest nodes
         for i in excluded_indices:
@@ -206,7 +205,8 @@ class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
         node_list = list(nodes_pending)
         for i in range(num_clusters):
             cluster = cluster_dict.get(i)
-            self.split_disconnected_cluster(cluster, cluster_labels, cluster_dict, topo, node_list, i)
+            cluster_dict, cluster_labels = self.split_disconnected_cluster(cluster, cluster_labels, cluster_dict, topo,
+                                                                           node_list, i)
         # Retrieve the indexes of the node list that are of an excluded type
         excluded_indices = [index for index, value in list(enumerate(types)) if value in nc.TYPES_EXCLUDED]
         # convert the cluster labels into a list to insert additional clusters
@@ -226,9 +226,6 @@ class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
     # Otherwise, split into different clusters.
     # Provide the cluster ...
     def split_disconnected_cluster(self, cluster, cluster_labels, cluster_dict, topo, node_list, idx):
-        # Continue with  nodes found and do the same process until no new nodes are added
-        # Include other nodes in the cluster at those edges i
-
         # Copy the cluster into a list of pending nodes to be checked
         pending_nodes = cluster.copy()
         # Store the list of clusters the original was split into
@@ -263,6 +260,7 @@ class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
             # Get the maximum key of the dict of clusters
             max_key = max(cluster_dict)
             # Exclude the first cluster (will stay at its position) and process the rest
+            # for i in range(1, len(new_clusters)):
             for i in range(1, len(new_clusters)):
                 # Get next cluster
                 cluster_to_create = new_clusters[i]
@@ -271,7 +269,7 @@ class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
                 # Update the cluster in the dictionary
                 cluster_dict[idx] = cluster
                 # Add the new cluster to the dictionary with the next key
-                cluster_dict[max_key+1] = cluster_to_create
+                cluster_dict[max(cluster_labels)+1] = cluster_to_create
                 # Get the next available label
                 new_label = max(cluster_labels)+1
                 # Update the new label in the cluster_labels array
@@ -279,4 +277,5 @@ class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
                     # Look for the position of the node
                     position = node_list.index(elem)
                     cluster_labels[position] = new_label
-        return
+
+        return cluster_dict, cluster_labels

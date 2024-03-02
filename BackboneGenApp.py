@@ -8,7 +8,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import Texts_EN
 import networkconstants as nc
 from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator, DistanceConnectedBasedClusterGenerator
-from BackboneGenerator import BackboneGenerator, DefaultBackboneGenerator, DualBackboneGenerator
+from BackboneGenerator import BackboneGenerator, DefaultBackboneGenerator, DualBackboneGenerator, WaxmanPavenGenerator
 from DistanceSetterWindow import DistanceSetterWindow
 from KeyValueList import KeyValueList
 from generator import write_network
@@ -170,13 +170,13 @@ class BackboneGenApp:
         btn_del_link = tk.Button(frame, text="Del link", command=self.del_link)
         btn_del_link.grid(row=3, column=1, sticky=tk.N)
         combo_node = ttk.Combobox(frame, name="source_list", state="readonly",
-                             values=["-"])
+                                  values=["-"])
         combo_node.current(0)
         combo_node.grid(row=4, column=1)
         self.fill_node_source_combo()
         combo_node.bind("<<ComboboxSelected>>", self.fill_node_dest_combo)
         combo_dest = ttk.Combobox(frame, name="dest_list", state="readonly",
-                             values=["-"])
+                                  values=["-"])
         combo_dest.current(0)
         combo_dest.grid(row=5, column=1)
         # Button to add a link
@@ -226,7 +226,7 @@ class BackboneGenApp:
         # Generator
         label_gen = tk.Label(frame, text="Generator")
         combo_gen = ttk.Combobox(frame, name="gen", state="readonly",
-                                 values=["Default", "Dual"])
+                                 values=["Default", "Dual", "Region"])
         combo_gen.current(0)
         label_gen.grid(row=(19 + initial_row), column=0, pady=5)
         combo_gen.grid(row=(19 + initial_row), column=1, pady=5)
@@ -275,6 +275,8 @@ class BackboneGenApp:
                        type_list: KeyValueList, algorithm, generator):
         if generator == "Default":
             self.back_gen = DefaultBackboneGenerator()
+        elif generator == "Region":
+            self.back_gen = WaxmanPavenGenerator()
         else:
             self.back_gen = DualBackboneGenerator()
 
@@ -365,7 +367,6 @@ class BackboneGenApp:
         else:
             self.setter.show(self.upper_limits)
 
-
     # Method to repaint the image frame with the new image
     def update_image_frame(self):
         old_canvas = None
@@ -441,7 +442,7 @@ class BackboneGenApp:
         selected_node = combo_src.get()
         values = []
         if selected_node != "_":
-            existing_linked_nodes = [v for u,v in self.topo.edges(selected_node)]
+            existing_linked_nodes = [v for u, v in self.topo.edges(selected_node)]
             values = [i for i in self.topo.nodes if i not in existing_linked_nodes and i != selected_node]
             values.sort()
         values.insert(0, "-")

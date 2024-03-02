@@ -1,4 +1,8 @@
 import collections
+
+import numpy as np
+from scipy import spatial
+
 import networkconstants as nc
 import networkx as nx
 import random
@@ -6,6 +10,8 @@ from scipy.spatial import distance
 import pandas as pd
 import os.path
 import Texts_EN as texts
+import math
+from itertools import combinations, product
 
 
 # Generate topology with the specific degrees and weights and the specified number of nodes
@@ -23,7 +29,6 @@ def gen_topology(degrees, weights, nodes):
         for i in range(len(sequence)):
             # Look for the first element with the smallest degree value and increase it, then break
             if sequence[i] == degrees[0]:
-                # print("Incremented " + str(i))
                 sequence[i] += 1
                 updated = True
                 break
@@ -32,7 +37,6 @@ def gen_topology(degrees, weights, nodes):
                 min_degree_idx = i
         if not updated:
             sequence[min_degree_idx] += 1
-            # print("Incremented " + str(min_degree_idx) + " with " + str(min_degree))
     # create the bidirectional network topology using the configuration model
     # it may create parallel edges and self-loops.
     g = nx.configuration_model(sequence)
@@ -40,7 +44,6 @@ def gen_topology(degrees, weights, nodes):
     g = nx.Graph(g)
     # Remove self-loops
     g.remove_edges_from(nx.selfloop_edges(g))
-    # print(len(g.edges))
     return g
 
 
@@ -57,7 +60,6 @@ def calculate_edge_distances(graph, positions, max_limit):
     distances = [distance.euclidean(positions[u], positions[v]) for u, v in graph.edges]
     factor = max_limit / max(distances)
     actual_distances = [int(dist * factor) for dist in distances]
-    # print(actual_distances)
     return actual_distances
 
 
@@ -272,22 +274,6 @@ def count_distance_ranges(distances, upper_limits):
     return percentages
 
 
-# Assign types to graph nodes based on type proportions
-'''def backbone_assign_types(graph, types):
-    # Generate k random values with the weight frequencies of degrees
-    sequence = random.choices(types.code, weights=types.proportion, k=len(graph.nodes))
-    return sequence
-
-
-# Assign types to graph nodes based on type proportions
-def metro_assign_types(types):
-    # print("metro_assign_types: ", types)
-    sequence = [code for code, val in types[['code', 'number']].values for _ in range(val)]
-    # Generate k random values with the weight frequencies of degrees
-    random.shuffle(sequence)
-    return sequence'''
-
-
 def set_missing_types_colors(assigned_types, dict_colors: dict):
     unique_types = set(assigned_types)
     for a_type in unique_types:
@@ -309,3 +295,453 @@ def format_distance_limits(distances, upper_limits):
         text += (str(init_dist) + "-" + str(upper) + ":\t" + str(perc) + "%\n")
         init_dist = upper
     return text
+
+
+def relocate_problematic(problematic, final_coordinates, dist_min):
+    # for each pair in problematic, try to relocate the first element. If fails, try with the second.
+    for a, b in problematic:
+        check_coordinates = [coor for coor in final_coordinates if coor != a and coor != b]
+        a_x, a_y = a
+        b_x, b_y = b
+        diff = np.subtract(a, b)
+
+        if abs(diff[0]) < dist_min:
+            a_x = int(a[0] + math.copysign(1, diff[0]) * (dist_min - abs(diff[0])))
+            b_x = int(b[0] - math.copysign(1, diff[0]) * (dist_min - abs(diff[0])))
+        if abs(diff[1]) < dist_min:
+            a_y = int(a[1] + math.copysign(1, diff[1]) * (dist_min - abs(diff[1])))
+            b_y = int(b[1] - math.copysign(1, diff[1]) * (dist_min - abs(diff[1])))
+        all_combinations = [(a_x, a[1]), (a[0], a_y), (a_x, a_y),
+                            (b_x, b[1]), (b[0], b_y), (b_x, b_y)]
+        new_problem = [(s, t) for s, t in product(check_coordinates, all_combinations) if
+                       abs(s[0] - t[0]) < dist_min and abs(s[1] - t[1]) < dist_min]
+        no_problem = [coor for coor in all_combinations if coor not in [tup[1] for tup in new_problem]]
+        if len(no_problem) == 0:
+            return final_coordinates, False
+        result = no_problem[0]
+        result_was_a = np.linalg.norm(np.subtract(result, a)) < np.linalg.norm(np.subtract(result, b))
+        old_value = a if result_was_a else b
+        final_coordinates[final_coordinates.index(old_value)] = result
+
+    return final_coordinates, True
+
+
+# Generate a graph trying to imitate the work from
+# C. Pavan, R. M. Morais, J. R. Ferreira da Rocha and A. N. Pinto,
+# "Generating Realistic Optical Transport Network Topologies,"
+# in Journal of Optical Communications and Networking, vol. 2, no. 1, pp. 80-90,
+# January 2010, doi: 10.1364/JOCN.2.000080.
+# We adapt it slightly as we are receiving different parameters
+# Part of the process is based on Waxman work
+def gen_waxman_paven_topology(nodes, regions, beta=0.4, alpha=0.4,
+                              squared_factor=4, dist_factor=0.63):
+    # The graph was succesfully generated
+    res = True
+
+    # Distributing regions in rows and columns following the Paven et al. description
+    actual_regions = regions
+    rows = find_max_prime(actual_regions)
+    if rows == actual_regions:
+        actual_regions += 1
+        rows = find_max_prime(actual_regions)
+    columns = int(actual_regions / rows)
+
+    # Instead of defining a global area and calculating area, rows and columns per region
+    # a factor (a squared integer) is used to define the area of each region and the
+    # total area
+    region_area = rows * columns * squared_factor
+    total_area = region_area * actual_regions
+    # Rows and columns for the regions are calculated based on the columns and the squared factor
+    region_rows = int(columns * math.sqrt(squared_factor))
+    region_columns = int(rows * math.sqrt(squared_factor))
+
+    # Instead of receiving the minimum distance between nodes, we calculate it based on a
+    # dist_factor parameter and the area available per node
+    # minimum distance^2 must be lower than total_area/nodes
+    dist_min = math.floor(math.sqrt(total_area / nodes) * dist_factor)
+    # Maximum number of nodes per region
+    max_nodes_region = math.floor(region_area / (dist_min ** 2))
+    # A too high value would make the process too unbalanced
+    if max_nodes_region > 2 * nodes / actual_regions:
+        max_nodes_region = math.floor(2 * nodes / actual_regions)
+
+    # Define how many nodes will be placed in each region
+    nodes_regions = generate_node_distribution_paven(nodes, regions, max_nodes_region)
+
+    # Create an empty graph and the number of nodes received as parameters
+    # The initial name of each node is its number in the sequence.
+    graph = nx.Graph()
+    graph.add_nodes_from([idx for idx in range(nodes)])
+
+    # The positions (coordinates) of the nodes per region and the generated names will
+    # be stored in dictionaries
+    pos = {}
+    names = {}
+    # Idx will be used to generate the names and will be incremented
+    idx = 0
+    # Go region by region
+    for i in range(regions):
+        num = nodes_regions[i]
+        # Create a list with all the possible coordinates in the region
+        coordinates = [(x, y) for x in range(1, region_rows + 1) for y in range(1, region_columns + 1)]
+        # Depending on the number of nodes the process to allocate them differs
+        match num:
+            case 1:
+                # For a single node, just select the position randomly
+                x = random.randint(1, region_rows)
+                y = random.randint(1, region_columns)
+                # Assign the coordinates
+                region_coord = [(x, y)]
+            case 2:
+                # For a region with two nodes, the position of the first node is
+                # selected randomly in the left part of the region.
+                x1 = random.randint(1, region_rows)
+                y1 = random.randint(1, math.floor(region_columns / 2))
+                # Remove all the coordinates at less than the minimum distances from the first node
+                coordinates = remove_coordinates_at_distance(coordinates, dist_min, x1, y1)
+                # Select randomly the coordinates for the second node among the ones remaining
+                (x2, y2) = random.choice(coordinates)
+                # Assign the coordinates
+                region_coord = [(x1, y1), (x2, y2)]
+                # Create a link between both nodes
+                graph.add_edge(idx, idx + 1)
+            case 3:
+                # For a region with two nodes, the position of the first node is
+                # selected randomly in the left part of the region.
+                x1 = random.randint(1, region_rows)
+                y1 = random.randint(1, math.floor(region_columns / 2))
+                # Repeat the process of searching for the other two nodes until it is successful
+                while True:
+                    # Remove all the coordinates at less than the minimum distances from the first node
+                    new_coord = remove_coordinates_at_distance(coordinates, dist_min, x1, y1)
+                    # Select randomly the coordinates for the second node among the ones remaining
+                    (x2, y2) = random.choice(new_coord)
+                    # Remove also all the coordinates at less than the minimum distances from the second node
+                    new_coord = remove_coordinates_at_distance(new_coord, dist_min, x2, y2)
+                    # If there is at least one coordinate available, we select one randomly for the
+                    # third element
+                    if len(new_coord) != 0:
+                        (x3, y3) = random.choice(new_coord)
+                        break
+                # Assign the coordinates
+                region_coord = [(x1, y1), (x2, y2), (x3, y3)]
+                # Create a cycle of links among the three nodes.
+                edges = [(idx, idx + 1), (idx, idx + 2), (idx + 1, idx + 2)]
+                # Add the edges to the topology
+                graph.add_edges_from(edges)
+            case _:
+                # For more than 3 elements, use a function to generate the coordinates
+                region_coord = create_positions_paven(coordinates, num, dist_min)
+                # Create a cycle that interconnects all the nodes and store the edges
+                existing_edges = region_cycle(region_coord, range(idx, idx + num), graph)
+                # Generate additional nodes using the Waxman probability
+                # For L (max_distance) we choose a pre-defined factor
+                waxman_edges(region_coord, range(idx, idx + num), alpha, beta, graph,
+                             max_distance=rows * region_rows * 1.4, existing_edges=existing_edges)
+        # We have processed "num" additional nodes.
+        idx += num
+        # Store the coordinates and the names
+        pos[i] = region_coord
+        # if rename:
+        names[i] = ["Reg" + str(i) + "_" + str(j) for j in range(num)]
+        # else:
+        #     names[i] = [j for j in range(num)]
+
+    # Once the whole process finishes, rename the nodes
+    graph = nx.relabel_nodes(graph, mapping=dict(zip(graph, [i for element in names.values() for i in element])))
+    final_coordinates = []
+    # Translate the local coordinates within a region to the global coordinate in the area
+    for i in range(regions):
+        pos[i] = move_coordinates_to_global_area(pos, i, columns, region_rows, region_columns)
+        final_coordinates.extend(pos[i])
+    # Connect adjacent regions based on Waxman and some additional restrictions
+    for i in range(regions):
+        connect_region(i, pos, columns, graph, names, alpha, beta)
+
+    # Set additional connections to ensure survivability
+    for i in range(regions):
+        ensure_survivability(i, pos, graph, names)
+
+    problematic = [(a, b) for a, b in combinations(final_coordinates, 2) if
+                   abs(a[0] - b[0]) < dist_min and abs(a[1] - b[1]) < dist_min]
+    final_coordinates, res = relocate_problematic(problematic, final_coordinates, dist_min)
+
+    # Normalization if needed
+    # norm_row_factor = rows * region_rows / 2
+    # norm_column_factor = columns * region_columns / 2
+    # normalized_coordinates = [[-1 + i / norm_row_factor, -1 + j / norm_column_factor] for i, j in final_coordinates]
+
+    # Final survivability check and edge addition
+    survival_edges = list(nx.k_edge_augmentation(graph, 2))
+    graph.add_edges_from(survival_edges)
+
+
+    # Set colors based in regions
+    # colors = [i * 2 for i, count in enumerate(nodes_regions, 1) for _ in range(count)]
+    # nx.draw(graph, pos=indexed_pos, node_color=colors, with_labels=True)
+    # plt.show()
+
+    # Reformat the positions to the format expected by networkx
+    pos = {name: coordinate for name, coordinate in zip(graph.nodes, final_coordinates)}
+
+    # Check for node survivability
+    if len(list(nx.minimum_node_cut(graph))) == 1:
+        return graph, pos, False
+
+    # figure.savefig("/Users/macian/Documents/test.png")
+    return graph, pos, res
+
+
+def connect_region(n_region, region_elements, columns, graph, names_region, alpha, beta):
+    coords_region = region_elements[n_region]
+
+    region_row, region_column = region_to_row_column(n_region, columns)
+    region_bottom = None if region_row == 0 else n_region - columns
+    region_right = None if region_column == columns - 1 else n_region + 1
+
+    if region_right is not None and region_right in region_elements:
+        coords_region_right = region_elements[region_right]
+
+        waxman_edges(coords_region, names_region[n_region], alpha, beta, graph,
+                     existing_edges=list(graph.edges),
+                     other_coordinates=coords_region_right,
+                     second_names=names_region[region_right])
+    if region_bottom is not None and region_bottom in region_elements:
+        coords_region_bottom = region_elements[region_bottom]
+
+        waxman_edges(coords_region, names_region[n_region], alpha, beta, graph,
+                     existing_edges=list(graph.edges),
+                     other_coordinates=coords_region_bottom,
+                     second_names=names_region[region_bottom])
+
+
+def ensure_survivability(n_region, region_elements, graph, names_region):
+    # If the region is  one of the automatically incorporated to build the rectangle area
+    # it will not hold any node
+    if n_region not in names_region:
+        return
+    # Get the names of the nodes in the region
+    names_nodes = names_region[n_region]
+    # Get how many nodes are in the region
+    length_region = len(names_nodes)
+
+    # Get all the connections between nodes in the region and external nodes
+    connections = [(i, j) for i, j in list(graph.edges) if i in names_nodes and j not in names_nodes]
+    connections.extend([(j, i) for i, j in list(graph.edges) if i not in names_nodes and j in names_nodes])
+
+    # Get the sources, i.e. the nodes in the region connected to others
+    sources = set([i for i, j in connections])
+    # Get the destinations, i.e. the nodes in other regions connected to this region
+    destinations = set([j for i, j in connections])
+
+    # If there are at least 2 nodes in the region connected to 2 external nodes, it is survivable
+    if len(sources) > 1 and len(destinations) > 1:
+        return
+
+    # Get all the nodes from connected regions
+    nodes_connected_regions = [names_region[region] for region, values in names_region.items()
+                               if not destinations.isdisjoint(values)]
+
+    # Get the coordinates of the region
+    coord_region = region_elements[n_region]
+    # Get the coordinates of the nodes from other regions
+    coordinates_other = [(i, j) for region, values in region_elements.items() for i, j in values if region != n_region]
+    # Get the names of the nodes from other regions
+    names_other = [name for region, names in names_region.items() for name in names if region != n_region]
+
+    # Create a KDTree to query for nearest neighbors
+    tree = spatial.KDTree(coordinates_other)
+    pairs = []
+    # We will traverse the region checking its nodes
+    for pos in range(length_region):
+        # Get the next node in the region
+        name = names_nodes[pos]
+
+        # If the region has more than 1 element and this is already connected, go for a different one
+        if len(connections) == 1 and connections[0][0] == name and length_region > 1:
+            continue
+
+        # Retrieve more than one element to avoid retrieving connection to an existing region or
+        # if it is a single node, to the destination
+        k = 10
+        # Get 10 results of neighbors (distances and index in coordinates_other/names_other) from the current node
+        distance, indexes = tree.query(coord_region[pos], k)
+
+        # Traverse the retrieve destinations
+        for i in indexes:
+            # Create a connection between the node in the region and the node found
+            edge = (name, names_other[i])
+
+            # In case that there was already a connection in a region with 1 node
+            # could be to this nearest neighbor
+            if length_region == 1 and edge in connections:
+                continue
+
+            # Do not send the connection to the same region to the existing connection
+            if len(connections) == 1 and names_other[i] in nodes_connected_regions:
+                continue
+
+            # Add this edge as a possible connection
+            pairs.append(edge)
+
+    # We will select a subset of the pairs found randomly
+    selected_edges = []
+    same_region = True
+
+    # As we might need to select 2 elements, we will try to choose them from different regions
+    while same_region:
+        # Take as much as 2 connections, 1 if there is already an existing one
+        # 1 if there is only 1 pair found
+        selected_edges = random.sample(pairs, k=min(2 - min(1, len(connections)), len(pairs)))
+
+        # Select the source and destination of the selected edges
+        destinations = set([j for i, j in selected_edges])
+        sources = set([i for i, j in selected_edges])
+
+        connected_regions = [region for region, values in names_region.items()
+                             if not destinations.isdisjoint(values)]
+        # print(connected_regions)
+
+        if (len(selected_edges) == len(connected_regions)
+                and (len(sources) == len(selected_edges) or length_region == 1)):
+            same_region = False
+
+    graph.add_edges_from(selected_edges)
+
+
+def region_cycle(coordinates, node_names, graph):
+    # find centre point (centre of gravity)
+    x0 = sum(x for x, _ in coordinates) / len(coordinates)
+    y0 = sum(y for _, y in coordinates) / len(coordinates)
+
+    # calculate angles and create list of tuples(index, angle)
+    radial = [(i, math.atan2(y - y0, x - x0)) for i, (x, y) in enumerate(coordinates)]
+
+    # sort by angle
+    radial.sort(key=lambda x: x[1])
+
+    # extract indices
+    ring = [a[0] for a in radial]
+
+    edges = [(node_names[ring[i]], node_names[ring[i + 1]]) for i in range(0, len(ring) - 1)]
+    edges.append((node_names[ring[0]], node_names[ring[len(ring) - 1]]))
+    graph.add_edges_from(edges)
+    return edges
+
+
+def waxman_edges(coordinates, node_names, alpha, beta, graph,
+                 max_distance=None, existing_edges=None, other_coordinates=None,
+                 second_names=None):
+    if max_distance is None:
+        if other_coordinates is None:
+            max_distance = max(math.dist(x, y) for x, y in combinations(coordinates, 2))
+        else:
+            max_distance = max(math.dist(x, y) for x, y in product(coordinates, other_coordinates))
+    pairs = None
+    if other_coordinates is None:
+        pairs = list(filter(lambda pair: random.random() < beta * math.exp(-math.dist(*pair) / (alpha * max_distance)),
+                            combinations(coordinates, 2)))
+        second_coordinates = coordinates
+        second_names = node_names
+    else:
+        pairs = list(filter(lambda pair: random.random() < beta * math.exp(-math.dist(*pair) / (alpha * max_distance)),
+                            list(product(coordinates, other_coordinates))))
+        second_coordinates = other_coordinates
+    positions = [(coordinates.index(pair[0]), second_coordinates.index(pair[1])) for pair in pairs]
+    edges = [(node_names[i], second_names[j]) for (i, j) in positions]
+    filtered_edges = [i for i in edges if i not in existing_edges]
+    # print(positions, " --> ", edges)
+    graph.add_edges_from(filtered_edges)
+    return filtered_edges
+
+
+def generate_node_distribution_paven(nodes, regions, max_nodes_region):
+    nodes_regions = [random.randint(1, max_nodes_region) for _ in range(regions - 1)]
+    nodes_last_region = nodes - sum(nodes_regions)
+
+    if nodes_last_region < 1:
+        while nodes_last_region < 1:
+            indexes = [idx for idx, elem in enumerate(nodes_regions) if elem != min(nodes_regions)]
+            if len(indexes) == 0:
+                indexes = range(0, len(nodes_regions) - 1)
+            for i in indexes:
+                nodes_regions[i] -= 1
+                nodes_last_region += 1
+                if nodes_last_region == 1:
+                    break
+    elif nodes_last_region > max_nodes_region:
+        while nodes_last_region > max_nodes_region:
+            indexes = [idx for idx, elem in enumerate(nodes_regions) if elem != max_nodes_region]
+            for i in indexes:
+                nodes_regions[i] += 1
+                nodes_last_region -= 1
+                if nodes_last_region == max_nodes_region:
+                    break
+    nodes_regions.append(nodes_last_region)
+
+    return nodes_regions
+
+
+def create_positions_paven(coordinates, elements, min_dist):
+    completed = False
+    coord = []
+    while not completed:
+        coord.append((min_dist, min_dist))
+        new_coord = remove_coordinates_at_distance(coordinates, min_dist, min_dist, min_dist)
+        completed = True
+        for i in range(elements - 1):
+            if len(new_coord) == 0:
+                completed = False
+                coord.clear()
+                print("failed tried at element: ", i)
+                break
+            (x2, y2) = random.choice(new_coord)
+            coord.append((x2, y2))
+            new_coord = remove_coordinates_at_distance(new_coord, min_dist, x2, y2)
+
+    return coord
+
+
+def remove_coordinates_at_distance(coordinates, distance, selected_x, selected_y):
+    new_coord = [(i, j) for i, j in coordinates if i <= selected_x - distance or i >= selected_x + distance or
+                 j <= selected_y - distance or j >= selected_y + distance]
+    return new_coord
+
+
+def find_max_prime(num):
+    max_prime = -1
+
+    # Print the number of 2s that divide n
+    while num % 2 == 0:
+        max_prime = 2
+        num >>= 1  # equivalent to n /= 2
+
+    for i in range(3, int(math.sqrt(num)) + 1, 2):
+        while num % i == 0:
+            max_prime = i
+            num = num / i
+
+    if num > 2:
+        max_prime = num
+
+    return int(max_prime)
+
+
+def move_coordinates_to_global_area(coordinates, region, columns, region_rows, region_columns):
+    # Position in the Y axis in terms of regions (e.g. second row of regions)
+    pos_region_row, pos_region_column = region_to_row_column(region, columns)
+
+    # The actual row will come from the previous regions in the axis and the number of rows per region
+    actual_row_factor = pos_region_row * region_rows
+    actual_column_factor = pos_region_column * region_columns
+    region_coordinates = coordinates[region]
+    global_ref_coordinates = [(i + actual_row_factor, j + actual_column_factor) for i, j in region_coordinates]
+    return global_ref_coordinates
+
+
+def region_to_row_column(region, columns):
+    # Position in the Y axis in terms of regions (e.g. second row of regions)
+    region_row = region // columns
+    # Position in the X axis in terms of regions (e.g. second column of regions)
+    region_column = region % columns
+    return region_row, region_column
