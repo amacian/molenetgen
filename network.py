@@ -2,6 +2,7 @@ import collections
 
 import numpy as np
 from scipy import spatial
+from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, root_mean_squared_error
 
 import networkconstants as nc
 import networkx as nx
@@ -298,8 +299,12 @@ def format_distance_limits(distances, upper_limits):
 
 
 def relocate_problematic(problematic, final_coordinates, dist_min):
+    res = True
     # for each pair in problematic, try to relocate the first element. If fails, try with the second.
     for a, b in problematic:
+        # One of them was relocated in a different iteration so it is no longer a problem
+        if a not in final_coordinates or b not in final_coordinates:
+            continue
         check_coordinates = [coor for coor in final_coordinates if coor != a and coor != b]
         a_x, a_y = a
         b_x, b_y = b
@@ -323,7 +328,13 @@ def relocate_problematic(problematic, final_coordinates, dist_min):
         old_value = a if result_was_a else b
         final_coordinates[final_coordinates.index(old_value)] = result
 
-    return final_coordinates, True
+    final_validation = [(a, b) for a, b in combinations(final_coordinates, 2) if
+                        abs(a[0] - b[0]) < dist_min and abs(a[1] - b[1]) < dist_min]
+    if len(final_validation) > 0:
+        print(final_validation)
+        res = False
+
+    return final_coordinates, res
 
 
 # Generate a graph trying to imitate the work from
@@ -690,10 +701,11 @@ def create_positions_paven(coordinates, elements, min_dist):
         new_coord = remove_coordinates_at_distance(coordinates, min_dist, min_dist, min_dist)
         completed = True
         for i in range(elements - 1):
+            # If we cannot fit more elements in the region, repeat the process with a different random selection
             if len(new_coord) == 0:
                 completed = False
                 coord.clear()
-                print("failed tried at element: ", i)
+                print("failed when allocating element: ", i)
                 break
             (x2, y2) = random.choice(new_coord)
             coord.append((x2, y2))
@@ -745,3 +757,23 @@ def region_to_row_column(region, columns):
     # Position in the X axis in terms of regions (e.g. second column of regions)
     region_column = region % columns
     return region_row, region_column
+
+
+def check_metrics(elements, weight, real_distribution, perc=False):
+
+    to_compare = []
+    generated_weight = []
+    if perc:
+        to_compare = real_distribution
+        generated_weight = real_distribution
+    else:
+        real_occurrence = {v: real_distribution.count(v) for v in set(real_distribution)}
+        total_occurrence = sum(real_occurrence.values())
+        generated_weight = {v: real_occurrence[v] / total_occurrence for v in real_occurrence}
+        to_compare = [generated_weight.get(v, 0) for v in elements]
+
+    mae = mean_absolute_error(weight, to_compare)
+    mape = mean_absolute_percentage_error(weight, to_compare)
+    rsme = root_mean_squared_error(weight, to_compare)
+
+    return mae, mape, rsme, generated_weight
