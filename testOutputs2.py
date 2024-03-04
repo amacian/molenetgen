@@ -4,7 +4,7 @@ import random
 import pandas
 import networkconstants as nc
 
-from BackboneGenerator import WaxmanPavenGenerator, DefaultBackboneGenerator, DualBackboneGenerator
+from MetroCoreGenerator import DefaultMetroCoreGenerator
 from network import check_metrics, count_distance_ranges
 
 import numpy as np
@@ -20,7 +20,6 @@ def average_distance_ranges(upper_distances, weights, distances):
     factor = total_avg / avg_dist
     new_distances = [distance * factor for distance in distances]
     return new_distances
-
 
 def optimize_distance_ranges(upper_distances, weights, distances):
     second_range = upper_distances[-2]
@@ -92,32 +91,12 @@ def optimize_distance_ranges2(upper_distances, weights, distances):
     return new_distances
 
 
-# Assign the maximum distance a value equals to the smallest value in the highest range.
-def reduce_distance_ranges(upper_distances, distances):
-    second_range = upper_distances[-2]
-    upper_limit = second_range + 1
-    factor = upper_limit / max(distances)
-    new_distances = [distance * factor for distance in distances]
-    return new_distances
-
-
 if __name__ == '__main__':
     random.seed(12345)
     # The possible node degrees
     degrees = [2, 3, 4, 5]
     # The frequency % of the node degrees in the total nodes
     weights = [23, 41, 27, 9]
-    '''graph, pos, res = gen_waxman_paven_topology(60, 20, dist_factor=0.6,
-                                                beta=0.4, alpha=0.3)'''
-    # Total number of nodes
-    nodes = 48
-    # Length limits
-    upper_limits = [50, 100, 200, 400, 600]
-    distance_weights = [0.155, 0.169, 0.338, 0.254, 0.085]
-
-    # Types and percentages for the nodes
-    types = pandas.DataFrame({'code': [nc.NATIONAL_CO_CODE, nc.REGIONAL_CO_CODE, nc.TRANSIT_CODE],
-                              'proportion': [0.826, 0.130, 0.044]})
 
     # Create and store the backbone network
     dict_colors = {
@@ -128,8 +107,18 @@ if __name__ == '__main__':
         nc.LOCAL_CO_CODE: 'o'
     }
 
-    generators = [DefaultBackboneGenerator(), DualBackboneGenerator(), WaxmanPavenGenerator(regions=12)]
-    name_generators = ["default", "dual", "pavan"]
+    # Length limits
+    nodes = 95
+    upper_limits = [10, 40, 80, 120]
+    distance_weights = [0.39, 0.37, 0.21, 0.03]
+    initial_refs = ['NCO1', 'NCO2', 'NCO3', 'NCO4', 'NCO5']
+    types = pandas.DataFrame({'code': [nc.DATA_CENTER_CODE, nc.NATIONAL_CO_CODE, nc.REGIONAL_CO_CODE,
+                                   nc.REGIONAL_NONHUB_CO_CODE],
+                                'proportion': [1, 5, 66, 23],
+                                'number': [1, 5, 66, 23]})
+
+    generators = [DefaultMetroCoreGenerator()]
+    name_generators = ["default"]
     algorithms = ["spectral", "spring", "kamada"]
 
     mape_results_degree = {}
@@ -145,7 +134,7 @@ if __name__ == '__main__':
     best_distance_distribution = {}
     best_mape_distance_distribution = {}
 
-    iterations_per_experiment = 1000
+    iterations_per_experiment = 100
 
     # Calculate the average degree to see if the final result is close to this value
     degree_pd = pandas.DataFrame({'degrees': degrees, 'weights': weights})
@@ -186,8 +175,9 @@ if __name__ == '__main__':
                 rsme_type = 0
                 rsme_distance = 0
 
-                topo, distances, assigned_types, node_sheet, link_sheet, pos, colors = (
-                    gen.generate(degrees, weights, nodes, upper_limits, types, algo=algorithm, dict_colors=dict_colors))
+                topo, distances, assigned_types, pos, colors = (
+                    gen.generate_mesh(degrees, weights, upper_limits, types, dict_colors=dict_colors,
+                                      algo=algorithm, national_nodes=initial_refs))
 
                 # Calculate the actual degrees for each node
                 degree_sequence = [val for (node, val) in topo.degree()]
