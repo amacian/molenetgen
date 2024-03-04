@@ -119,6 +119,12 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
         while True:
             # Call the function to generate the topology
             topo = gen_topology(degrees, weights, nodes)
+            if not nx.is_connected(topo) or len(nx.minimum_node_cut(topo)) < 2:
+                continue
+            # Should be edge survivable, but just in case
+            survival_edges = list(nx.k_edge_augmentation(topo, 2))
+            topo.add_edges_from(survival_edges)
+
             # Calculate the actual degrees for each node
             dist_degrees = [val for (node, val) in topo.degree()]
             # Topology generation removes parallel links and self-loops, so
