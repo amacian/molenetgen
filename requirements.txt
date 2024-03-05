@@ -1,0 +1,7 @@
+matplotlib
+networkx
+scikit-learn
+pandas
+openpyxl
+numpy
+scipy
