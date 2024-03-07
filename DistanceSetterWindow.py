@@ -72,5 +72,5 @@ class DistanceSetterWindow():
             value = self.list_distances.delete(index)
         return
 
-    def show(self, upper_limits):
+    def show(self, upper_limits, max_distance):
         self.create_window(upper_limits, max_distance)
