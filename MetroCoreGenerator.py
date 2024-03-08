@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+
+from scipy import spatial
 import networkconstants as nc
 import random
 import networkx as nx
@@ -156,6 +158,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
         relabelled = [val + len(topology.nodes) for val in sub_topology.nodes]
 
         indexes = []
+        low_degree = min_degree
         while True:
             temp = [index + len(topology.nodes) for index, element in sub_topology.degree if element == low_degree]
             indexes.extend(temp)
@@ -229,7 +232,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
             # Generate random values for the lengths between offices using the uniform
             # distribution except for the last link
-            link_lengths = [random.uniform(range_ring[0], range_ring[1]) for i in range(offices)]
+            link_lengths = [random.uniform(range_ring[0], range_ring[1]) for _ in range(offices)]
             # Calculate the length of the final link
             pending_length = length - sum(link_lengths)
             # pending_length might be negative due to the way the lengths are built
@@ -351,3 +354,171 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
         nx.set_edge_attributes(g, dict(zip(g.edges, link_lengths)), 'weight')
 
         return g
+
+
+class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
+
+    def __init__(self, scale_factor = 0.65):
+        # In case of retrieving BB nodes, fit them in the inner X% of the new image
+        self.scale_factor = scale_factor
+
+    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
+                      national_nodes=[], add_prefix="", extra_node_info=None):
+
+        # No coordinates available, go to the default generator
+        if extra_node_info is None or nc.XLS_X_BACK not in extra_node_info or nc.XLS_Y_BACK not in extra_node_info:
+            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors,
+                                         algo, national_nodes, add_prefix, extra_node_info)
+
+        # Increment in %distance in case that a BB node is to be inserted in an already used coordinate.
+        increment = 0.01
+
+        # If it does not receive the name of the national nodes, generate them as a sequence
+        # based on the number of nodes defined for National COs.
+        if len(national_nodes) == 0:
+            num_nodes = types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'].values[0]
+            national_nodes = [nc.NATIONAL_CO_CODE + str(i + 1) for i in range(num_nodes)]
+
+        # If we do not have enough coordinates we call the basic algorithm
+        # When we have just 1 national node, we can just call the basic algorithm.
+        if len(national_nodes) != len(extra_node_info):
+            print(national_nodes, extra_node_info, len(national_nodes))
+            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors,
+                                         algo, national_nodes, add_prefix, extra_node_info)
+
+        # Nodes excluding NCOs to generate the topology without the BB nodes
+        nodes_no_nco = sum([num for num, code in zip(types.number,types.code) if code != nc.NATIONAL_CO_CODE])
+
+        # Additional prefix to name the generated nodes
+        prefix = "_" + str((list(extra_node_info[nc.XLS_CLUSTER]))[0]) + "_"
+
+        # Repeat the creation of the topology with all nodes except the NCOs until it is survivable
+        while True:
+            # Call the function to generate the topology
+            topo = gen_topology(degrees, weights, nodes_no_nco)
+            # Check for node survivability
+            if not nx.is_connected(topo) or len(nx.minimum_node_cut(topo)) < 2:
+                continue
+
+            # Should be edge survivable, but just in case
+            survival_edges = list(nx.k_edge_augmentation(topo, 2))
+            topo.add_edges_from(survival_edges)
+
+            # Calculate the actual degrees for each node
+            dist_degrees = [val for (node, val) in topo.degree()]
+            # Topology generation removes parallel links and self-loops, so
+            # it is possible that the number of degrees of some nodes is
+            # smaller than the smallest allowed degree.
+            if min(dist_degrees) >= degrees[0]:
+                # Finish only if the degrees of all nodes are >= minimum accepted degree
+                break
+            # Otherwise, repeat the node generation
+
+        # Types and related proportions (escluding NCOs)
+        types_no_nco= [code for code in types.code if code != nc.NATIONAL_CO_CODE]
+        props_no_nco = [prop for code, prop in zip(types.code, types.proportion) if code != nc.NATIONAL_CO_CODE]
+        # Assign types to nodes
+        assigned_types = random.choices(types_no_nco, weights=props_no_nco, k=len(topo.nodes))
+
+        # Modify the node labels to name them as a combination of the type, an index and the additional prefix
+        name_nodes = rename_nodes(assigned_types, types, add_prefix=prefix)
+        topo = nx.relabel_nodes(topo, dict(zip(topo.nodes, name_nodes)))
+
+        # Generate positions of the nodes based on the defined algorithm
+        pos = None
+        match algo:
+            case nc.KAMADA_ALGO:
+                pos = nx.kamada_kawai_layout(topo)
+            case nc.SPRING_ALGO:
+                pos = nx.spring_layout(topo)
+            case nc.SPIRAL_ALGO:
+                pos = nx.spiral_layout(topo)
+            case nc.SHELL_ALGO:
+                pos = nx.shell_layout(topo)
+            case _:
+                pos = nx.spectral_layout(topo)
+
+        # Retrieving minimum X, Y from the topology and X width and Y height
+        topo_coords = list(pos.values())
+        x_coord_topo = [x for x, y in topo_coords]
+        y_coord_topo = [y for x, y in topo_coords]
+        min_x_topo = min(x_coord_topo)
+        min_y_topo = min(y_coord_topo)
+        x_dist_topo = max(x_coord_topo)-min(x_coord_topo)
+        y_dist_topo = max(y_coord_topo)-min(y_coord_topo)
+
+        # Coordinates of the National nodes when they were generated in the backbone
+        # Retrieving minimum X, Y from the topology and X width and Y height
+        x_coord_bb = extra_node_info[nc.XLS_X_BACK]
+        y_coord_bb = extra_node_info[nc.XLS_Y_BACK]
+
+        min_x_bb = min(x_coord_bb)
+        min_y_bb = min(y_coord_bb)
+        x_dist_bb = max(x_coord_bb) - min_x_bb
+        y_dist_bb = max(y_coord_bb) - min_y_bb
+
+        # Center coordinates for the BB nodes
+        # The BB nodes will be allocated starting from a position that is based on the (0,0) value of
+        # the topology adding a % of the total x length of the topology. The center point of the BB node
+        # coordinates will be moved to that (0, 0) position. As the BB nodes are to be placed
+        # in the X% inner part (scale factor, e.g. 0.9--> 90%), there will be 5% below the top limit and
+        # 5% above the lower limit where the BBs will not be placed.
+        center_x_bb = min_x_bb if len(national_nodes) == 1 else x_dist_bb / 2 + min_x_bb
+        center_y_bb = min_y_bb if len(national_nodes) == 1 else y_dist_bb / 2 + min_y_bb
+
+        # Rescaling factor of relative positions from the backbone positions to the metro generated ones.
+        factor_x = self.scale_factor * x_dist_topo/x_dist_bb if len(national_nodes) > 1 else 1
+        factor_y = self.scale_factor * y_dist_topo/y_dist_bb if len(national_nodes) > 1 else 1
+
+        # Prepare a tree with all the coordinates of the generated topology
+        tree = spatial.KDTree(topo_coords)
+        # Get the names of the nodes that are in the same order as topo_coords
+        key_coord_nodes = list(pos.keys())
+        # Connect the national nodes
+        for node in national_nodes:
+            # Move the axis of the bb coordinates to the center X and Y of the BB coordinates
+            x_coord_node = extra_node_info.loc[extra_node_info[nc.XLS_NODE_NAME] == node, nc.XLS_X_BACK].iloc[0]
+            y_coord_node = extra_node_info.loc[extra_node_info[nc.XLS_NODE_NAME] == node, nc.XLS_Y_BACK].iloc[0]
+            # Distance to the central point of the BB coordinates
+            x_node = x_coord_node - center_x_bb
+            y_node = y_coord_node - center_y_bb
+
+            # Relocate to the topo x and y axis (center_x_bb, center_y_bb) --> (0, 0) and rescale the distance
+            x_node = x_node * factor_x
+            y_node = y_node * factor_y
+
+            # Check that the position is available
+            # This should not be a problem at this point as we are not defining minimum distances
+            xy_coord_topo = [(x, y) for x, y in topo_coords]
+            # If it is taken, move slightly the position of the new node until we found an empty space.
+            while (x_node, y_node) in xy_coord_topo:
+                # Node already existed at this position
+                print("Node existed at this position. Relocating BB node")
+                x_node = x_node + x_dist_topo * increment
+                y_node = y_node + y_dist_topo * increment
+
+            # Create the nodes in the topology at those positions and assign the type
+            topo.add_node(node)
+            pos[node] = [x_node, y_node]
+            assigned_types.append(nc.NATIONAL_CO_CODE)
+
+            # Connect to other nodes
+            # Select the connectivity degree
+            connectivity = random.choices(degrees, weights=weights, k=1)[0]
+            # Find as many nodes as required that are the nearest to this node
+            distance, indexes = tree.query((x_node, y_node), k=connectivity)
+            # Retrieve the name of each of those nodes and add an edge between them
+            for con in range(connectivity):
+                name_connected = key_coord_nodes[indexes[con]]
+                topo.add_edge(node, name_connected)
+
+        # Define the upper bound for the distances. Could be the maximum limit
+        # or something below that (e.g. 1/2 of the last range)
+        corrected_max_upper = upper_limits[-1]
+        # Scale the distances from the topology to the defined values
+        distances = calculate_edge_distances(topo, pos, corrected_max_upper)
+
+        # Generate a sequence of colors for each node depending on the type
+        colors = color_nodes(assigned_types, dict_colors)
+
+        return topo, distances, assigned_types, pos, colors
