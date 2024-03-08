@@ -5,7 +5,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from KeyValueList import KeyValueList
-from MetroCoreGenerator import MetroCoreGenerator, DefaultMetroCoreGenerator
+from MetroCoreGenerator import MetroCoreGenerator, DefaultMetroCoreGenerator, CoordinatesMetroCoreGenerator
 from ValueList import ValueList
 from generator import write_network
 import pandas as pd
@@ -28,7 +28,8 @@ class MetroGenApp:
         if initial_refs is None:
             initial_refs = []
 
-        self.metro_gen = DefaultMetroCoreGenerator()
+        self.metro_gen = DefaultMetroCoreGenerator() # CoordinatesMetroCoreGenerator()
+
         # Reference national nodes initialized to None
         self.national_ref_nodes = None
         # Cluster list is empty but will be filled if read from file
@@ -458,13 +459,13 @@ class MetroGenApp:
 
     def clusters_as_list_of_nodes(self, names, clusters):
         names_clusters = set(clusters)
+        if -1 in names_clusters:
+            names_clusters.remove(-1)
         self.cluster_list = list(names_clusters)
         self.cluster_list.sort()
         self.nodes_clusters = {}
         text = "Defined clusters:\n"
         for name in names_clusters:
-            if name == 0:
-                continue
             idx_for_cluster = [pos for pos, value in enumerate(clusters) if value == name]
             text += "Cluster " + str(name) + "["
             newline = 10

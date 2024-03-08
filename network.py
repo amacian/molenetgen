@@ -109,7 +109,7 @@ def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, mac
                 reference_nodes = [val for val in graph.nodes]
 
     if macro_region is None:
-        macro_region = [0] * len(graph.nodes)
+        macro_region = [-1] * len(graph.nodes)
 
     if reference_nodes is None:
         reference_nodes = [''] * len(graph.nodes)
