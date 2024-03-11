@@ -9,9 +9,9 @@ This work has been developed under R&D projects:
 
 To cite this project use:
 A. Sánchez-Macián, N. Koneva, M. Quagliotti, J.M. Rivas-Moscoso, F. Arpanaei,
-J. A. Hernández, J.P. Fernández-Palacios, E. Riccardi and L. Zhang
+J. A. Hernández, J.P. Fernández-Palacios, L. Zhang and  E. Riccardi 
 "MoleNetwork: A tool for the generation of  synthetic optical network topologies",
-Submitted to IEEE ...
+Submitted to IEEE Journal on Selected Areas in Communications.
 
 To download and execute the tool, create a directory to hold the project and run:
 git clone https://github.com/amacian/molenetgen
