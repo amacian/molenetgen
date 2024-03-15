@@ -347,7 +347,9 @@ class MetroGenApp:
             # Types defined by the user might not include national nodes
             # But they might have included reference nodes either in the GUI list or read from file
             if nc.NATIONAL_CO_CODE in list(types['code']):
-                types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(node_ref_number)
+                # Only if the list is not empty
+                if len(node_ref_number) > 0:
+                    types.loc[types['code'] == nc.NATIONAL_CO_CODE, 'number'] = len(node_ref_number)
             else:
                 # If the user defined the NCO type, the proportion and values need to be re-writen to match
                 # the reference nodes. TODO: consider if BB clusters read from file include other types of nodes
