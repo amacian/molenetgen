@@ -40,4 +40,4 @@ XLS_DEST_ID='destinationID'
 XLS_DISTANCE='distanceKm'
 XLS_CAPACITY_GBPS='capacityGbps'
 
-
+ITERATIONS_FOR_DISTANCE = 10

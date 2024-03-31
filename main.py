@@ -14,6 +14,8 @@ if __name__ == '__main__':
     nodes = 48
     # Length limits
     upper_limits = [50, 100, 200, 400, 600]
+    # the frequency of each range of limits
+    propor_limits = [15.5, 16.9, 33.8, 25.4, 8.5]
 
     # Types and percentages for the nodes
     types = pd.DataFrame({'code': [nc.NATIONAL_CO_CODE, nc.REGIONAL_CO_CODE, nc.TRANSIT_CODE],
@@ -28,4 +30,8 @@ if __name__ == '__main__':
         nc.LOCAL_CO_CODE: 'o'
     }
 
-    app = BackboneGenApp(degrees, weights, nodes, upper_limits, types, dict_colors)
+    # Topologies to create in order to get the best one and approximate to the requested distances
+    iters = 20
+
+    app = BackboneGenApp(degrees, weights, nodes, upper_limits, propor_limits, types, dict_colors,
+                         iterations_distance=iters)

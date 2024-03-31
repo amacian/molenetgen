@@ -289,12 +289,17 @@ def color_nodes(assigned_types, dict_colors):
     return [dict_colors[assigned_type] for assigned_type in assigned_types]
 
 
-def format_distance_limits(distances, upper_limits):
+def format_distance_limits(distances, upper_limits, req_perc=None):
     init_dist = 0
     text = "% of distances per range (kms):\n"
-    for upper, perc in zip(upper_limits, (count_distance_ranges(distances, upper_limits))):
-        text += (str(init_dist) + "-" + str(upper) + ":\t" + str(perc) + "%\n")
+    if req_perc is None:
+        req_perc = count_distance_ranges(distances, upper_limits)
+    else:
+        req_perc = [round(req * 100, 1) for req in req_perc]
+    for upper, perc, req in zip(upper_limits, (count_distance_ranges(distances, upper_limits)), req_perc):
+        text += (str(init_dist) + "-" + str(upper) + ":\t" + str(perc) + "% (" + str(req) + ")\n")
         init_dist = upper
+    text += "Max length = " + str(max(distances)) + "\n"
     return text
 
 
@@ -777,3 +782,22 @@ def check_metrics(elements, weight, real_distribution, perc=False):
     rsme = root_mean_squared_error(weight, to_compare)
 
     return mae, mape, rsme, generated_weight
+
+
+def optimize_distance_ranges(upper_distances, weights, distances):
+    upper_limit = max(upper_distances)
+    new_distances = distances.copy()
+    step = upper_limit / 100
+    ref_mape = 1000
+    while upper_limit > 0:
+        factor = upper_limit / max(distances)
+        alt_distances = [distance * factor for distance in distances]
+        actual_distance_weight = [dist / 100 for dist in count_distance_ranges(alt_distances, upper_distances)]
+        mae, mape_distance, rsme_distance, actual_dist = check_metrics(upper_distances, weights,
+                                                                       actual_distance_weight, perc=True)
+        if mape_distance < ref_mape:
+            new_distances = alt_distances
+            ref_mape = mape_distance
+        upper_limit = upper_limit - step
+
+    return new_distances

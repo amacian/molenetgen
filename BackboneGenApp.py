@@ -13,7 +13,8 @@ from DistanceSetterWindow import DistanceSetterWindow
 from KeyValueList import KeyValueList
 from generator import write_network
 import pandas as pd
-from network import format_distance_limits, calculate_edge_distances
+from network import format_distance_limits, calculate_edge_distances, optimize_distance_ranges, count_distance_ranges, \
+    check_metrics
 import Texts_EN as texts
 
 
@@ -25,13 +26,22 @@ class BackboneGenApp:
     # degrees - degrees of connectivity
     # weights - distribution of % of elements per each degree
     # nodes - number of nodes
-    # upper_limits - distance upper limits per ranges. TODO - make it configurable
+    # upper_limits - distance upper limits per ranges.
+    # distance_range_props - proportion for each distance range
     # types - dataframe with office codes (e.g. RCO) and proportions
     # dict_colors - dictionary that maps types to colors for the basic graph
-    def __init__(self, degrees, weights, nodes, upper_limits, types, dict_colors={}):
-        # Store the distance ranges and the max distance value
+    # iterations_distance - number of topologies to generate to get the best fit for the distances
+    def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types,
+                 dict_colors={}, iterations_distance=nc.ITERATIONS_FOR_DISTANCE):
+        # Store the distance ranges, the requested proportions and the max distance value
         self.upper_limits = upper_limits
+        self.req_distance_props = distance_range_props
         self.max_upper = max(self.upper_limits)
+        # Number of topologies to generate in order to get the one with a distance distribution
+        # nearest to the requested one
+        self.iterations_distance = iterations_distance
+
+        self.distances = None
         # Backbone generator object
         self.back_gen = DefaultBackboneGenerator()
         # Cluster generator object
@@ -54,16 +64,8 @@ class BackboneGenApp:
         self.fig_height = 10
         self.fig_width = 10
 
-        # Generate the backbone network using the predefined parameters.
-        # Retrieve the generated topology, a list with distance per edge,
-        # the list of type per node, the name of the node and link sheets at the excel file
-        # the position of the nodes and the assigned colors
-        self.topo, self.distances, self.assigned_types, \
-            self.node_sheet, self.link_sheet, \
-            self.pos, self.colors = self.back_gen.generate(degrees, weights, nodes,
-                                                           self.upper_limits, types,
-                                                           dict_colors=dict_colors,
-                                                           max_distance=self.max_upper)
+        self.best_fit_topology_n(degrees, weights, nodes, types, dict_colors)
+
         # Variable to hold the assigned clusters
         self.clusters = None
 
@@ -156,8 +158,9 @@ class BackboneGenApp:
 
         btn_set_distances = tk.Button(frame, text="Change \ndistances", command=self.open_dist_window)
         btn_set_distances.grid(row=0, column=1, sticky=tk.N)
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         label_printable = tk.Label(frame,
-                                   text=format_distance_limits(self.distances, self.upper_limits),
+                                   text=format_distance_limits(self.distances, self.upper_limits, req_weights),
                                    name="print_distances", anchor="w")
         label_printable.grid(row=1, column=1, sticky=tk.N)
 
@@ -237,12 +240,10 @@ class BackboneGenApp:
         frame = ttk.Frame(parent, name=frame_name)
         label_EPS = tk.Label(frame, text="Select max epsilon to group")
         label_EPS.grid(row=0, column=0)
-        combo = ttk.Combobox(frame, name="max_group", state="readonly",
-                             values=["0.03", "0.05", "0.055", "0.06", "0.065", "0.07", "0.075",
-                                     "0.08", "0.085", "0.09", "0.095", "0.1", "0.11",
-                                     "0.12", "0.125", "0.13", "0.14", "0.15"])
-        combo.current(0)
-        combo.grid(row=0, column=1, pady=5)
+        slider =tk.Scale(frame, name="max_group", from_=0.001, to=0.5,
+                         orient=tk.HORIZONTAL, resolution=0.001)
+        slider.set(0.03)
+        slider.grid(row=0, column=1)
         label_single = tk.Label(frame, text="Avoid single nodes")
         label_single.grid(row=1, column=0)
         check = ttk.Checkbutton(frame, name="avoid_single", variable=self.remove_single_clusters)
@@ -300,16 +301,17 @@ class BackboneGenApp:
             print("Error in number of nodes, using default: ", nodes)
 
         # Call the backbone function with the expected parameters
-        self.topo, self.distances, self.assigned_types, \
-            self.node_sheet, self.link_sheet, self.pos, self.colors = \
-            self.back_gen.generate(degrees, weights, nodes, self.upper_limits, types, algorithm.get(),
-                                   self.color_codes, max_distance=self.max_upper)
+        self.best_fit_topology_n(degrees, weights, nodes, types, self.color_codes, algorithm.get())
+
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)
+
         self.update_image_frame()
 
     # Regenerate the group graph
     def group_graph(self):
         # Find the combo that defines the eps
-        combo = self.root.nametowidget("notebook_gen.group_tab.max_group")
+        slider = self.root.nametowidget("notebook_gen.group_tab.max_group")
         # Find the combo that defines the Clustering method
         cluster_alg = self.root.nametowidget("notebook_gen.group_tab.algo_cluster")
         match cluster_alg.get():
@@ -319,7 +321,7 @@ class BackboneGenApp:
                 self.cluster_gen = DistanceConnectedBasedClusterGenerator()
         # Call the function that generates the tab
         groups, self.clusters = self.cluster_gen.find_groups(self.topo, self.assigned_types, self.pos,
-                                                             eps=float(combo.get()),
+                                                             eps=float(slider.get()),
                                                              avoid_single=self.remove_single_clusters.get())
         # Retrieve a reference to the frame and to the label included in that frame
         frame = self.root.nametowidget("notebook_gen.group_tab")
@@ -364,9 +366,11 @@ class BackboneGenApp:
     # Open the window that will modify the distance ranges.
     def open_dist_window(self):
         if self.setter is None:
-            self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.max_upper)
+            # self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.max_upper)
+            self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.req_distance_props,
+                                                   self.max_upper, self.iterations_distance)
         else:
-            self.setter.show(self.upper_limits, self.max_upper)
+            self.setter.show(self.upper_limits, self.req_distance_props, self.max_upper, self.iterations_distance)
 
     # Method to repaint the image frame with the new image
     def update_image_frame(self):
@@ -412,7 +416,8 @@ class BackboneGenApp:
                 node_color=self.colors, ax=ax)
         # Retrieve the reference to the label where distance ranges and proportions are drawn
         output_label = frame.nametowidget("print_distances")
-        output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
         # Call to the creation of the grouping/cluster graph with existing values
         self.group_graph()
         self.fill_link_list_combo()
@@ -476,14 +481,58 @@ class BackboneGenApp:
 
     def set_distance_parameters(self):
         self.distances = calculate_edge_distances(self.topo, self.pos, self.max_upper)
+        # Calculate weights from requested proportions and regenerate distances optimizing the
+        # mean error
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)
 
-    def set_upper_limits(self, upper_limits, max_distance):
+    def set_upper_limits(self, upper_limits, req_proportions, max_distance, iterations=None):
+        if iterations is not None:
+            self.iterations_distance = iterations
         # variable for the upper limits of the distances.
         self.upper_limits = upper_limits
+        # Requested proportions for distances
+        self.req_distance_props = req_proportions
         # Set the highest value to the point in the middle of the highest range
         self.max_upper = max_distance
         # Calculate distances based on this parameter
         self.set_distance_parameters()
         # Update the description of % per link
         output_label = self.root.nametowidget("notebook_gen.image_frame.print_distances")
-        output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
+
+    def best_fit_topology_n(self, degrees, weights, nodes, types, dict_colors, algorithm="spectral"):
+        aux_topo, aux_distances, aux_assigned_types, \
+            aux_node_sheet, aux_link_sheet, \
+            aux_pos, aux_colors = None, None, None, None, None, None, None
+        ref_mape = 1000
+        for i in range(self.iterations_distance):
+            # Generate the backbone network using the predefined parameters.
+            # Retrieve the generated topology, a list with distance per edge,
+            # the list of type per node, the name of the node and link sheets at the excel file
+            # the position of the nodes and the assigned colors
+            aux_topo, aux_distances, aux_assigned_types, \
+                aux_node_sheet, aux_link_sheet, \
+                aux_pos, aux_colors = self.back_gen.generate(degrees, weights, nodes,
+                                                             self.upper_limits, types,
+                                                             algo=algorithm,
+                                                             dict_colors=dict_colors,
+                                                             max_distance=self.max_upper)
+
+            # Calculate weights from requested proportions and regenerate distances optimizing the
+            # mean error
+            req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+            aux_distances = optimize_distance_ranges(self.upper_limits, req_weights, aux_distances)
+            # Calculate error metrics to try to select the best topology
+            new_distance_weight = [dist / 100 for dist in count_distance_ranges(aux_distances, self.upper_limits)]
+            mae, mape_distance, rsme_distance, actual_dist = check_metrics(self.upper_limits, req_weights,
+                                                                           new_distance_weight, perc=True)
+
+            if mape_distance < ref_mape:
+                self.topo, self.distances, self.assigned_types, \
+                    self.node_sheet, self.link_sheet, \
+                    self.pos, self.colors = aux_topo, aux_distances, aux_assigned_types, \
+                    aux_node_sheet, aux_link_sheet, \
+                    aux_pos, aux_colors
+                ref_mape = mape_distance
