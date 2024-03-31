@@ -9,9 +9,11 @@ from MetroCoreGenerator import MetroCoreGenerator, DefaultMetroCoreGenerator, Co
 from ValueList import ValueList
 from generator import write_network
 import pandas as pd
-from network import format_distance_limits
+from network import format_distance_limits, count_distance_ranges, check_metrics, optimize_distance_ranges, \
+    calculate_edge_distances
 import networkconstants as nc
 import Texts_EN as texts
+from DistanceSetterWindow import DistanceSetterWindow
 
 
 # Class for the Tkinter Topology Generator Application
@@ -21,10 +23,12 @@ class MetroGenApp:
     # degrees - degrees of connectivity
     # weights - distribution of % of elements per each degree
     # nodes - number of nodes
-    # upper_limits - distance upper limits per ranges. TODO - make it configurable
+    # upper_limits - distance upper limits per ranges.
+    # distance_range_props - proportion for each distance range
     # types - dataframe with office codes (e.g. RCO) and proportions
     # dict_colors - dictionary that maps types to colors for the basic graph
-    def __init__(self, degrees, weights, nodes, upper_limits, types, dict_colors={}, initial_refs=None):
+    def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types,
+                 dict_colors={}, initial_refs=None, iterations_distance=nc.ITERATIONS_FOR_DISTANCE):
         if initial_refs is None:
             initial_refs = []
 
@@ -60,6 +64,11 @@ class MetroGenApp:
 
         # variable for the upper limits of the distances.
         self.upper_limits = upper_limits
+        # Requested proportions for distances
+        self.req_distance_props = distance_range_props
+        # Number of topologies to generate in order to get the one with a distance distribution
+        # nearest to the requested one
+        self.iterations_distance = iterations_distance
 
         # Variable to hold the value of the checkbox to select ring instead of mesh
         self.ring_var = tk.BooleanVar(self.root)
@@ -76,9 +85,11 @@ class MetroGenApp:
         total = np.rint(nodes * types.proportion / total_proportion)
         types["number"] = total.astype(int)
 
-        self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
+        '''self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
             self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, dict_colors,
-                                         algo=nc.KAMADA_ALGO)
+                                         algo=nc.KAMADA_ALGO)'''
+        self.best_fit_topology_n(degrees, weights, types, node_ref_number=[], add_prefix="", extra_node_info=None,
+                                 algorithm=nc.KAMADA_ALGO)
         # Variable to hold the assigned clusters
         self.clusters = None
         self.radio_val = tk.StringVar(value="0")
@@ -119,6 +130,9 @@ class MetroGenApp:
                                                                 node_number, type_list,
                                                                 algorithm.get()))
         run_button.pack(side=tk.BOTTOM)
+
+        # Variable to hold the window to modify distances
+        self.setter = None
 
         # Start the Tkinter event loop
         self.root.mainloop()
@@ -235,18 +249,22 @@ class MetroGenApp:
         # Add the Tkinter canvas to the window
         # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
+        canvas_widget.grid(row=0, rowspan=3, column=0, sticky=tk.W + tk.N)
         # print(self.colors)
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
 
+        btn_set_distances = tk.Button(frame, text="Change \ndistances", command=self.open_dist_window)
+        btn_set_distances.grid(row=0, column=1, sticky=tk.N)
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         label_printable = tk.Label(frame,
-                                   text=format_distance_limits(self.distances, self.upper_limits),
+                                   text=format_distance_limits(self.distances, self.upper_limits,
+                                                               req_weights),
                                    name="print_distances", anchor="w")
         # label_printable.pack(side=tk.BOTTOM)
-        label_printable.grid(row=2, column=0, sticky=tk.S)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
+        label_printable.grid(row=1, column=1, sticky=tk.N)
+        # frame.rowconfigure(0, weight=1)
+        # frame.columnconfigure(0, weight=1)
         return frame, canvas
 
     def create_tab_list(self, parent, key_names, value_names, node_names, frame_name, type_names,
@@ -373,9 +391,11 @@ class MetroGenApp:
             if selected_cluster != "-":
                 add_prefix = "_" + selected_cluster + "_"
             # Call the metro function with the expected parameters
-            self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
+            '''self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
                 self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
-                                             algorithm, node_ref_number, add_prefix, extra_node_info)
+                                             algorithm, node_ref_number, add_prefix, extra_node_info)'''
+            self.best_fit_topology_n(degrees, weights, types, node_ref_number, add_prefix, extra_node_info,
+                                     algorithm)
             self.national_ref_nodes = ["" for i in self.topo.nodes]
         # Get x and y coordinates for all the elements
         x_pos = [pos[0] for pos in list(self.pos.values())]
@@ -403,14 +423,15 @@ class MetroGenApp:
         # canvas_widget.config(width=x_size, height=y_size)
         # Add the Tkinter canvas to the window
         # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
-        canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
+        canvas_widget.grid(row=0, column=0, rowspan=3, sticky=tk.W + tk.N)
 
         # Draw the figure
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=self.colors, ax=ax)
         # Retrieve the reference to the label where distance ranges and proportions are drawn
         output_label = frame.nametowidget("print_distances")
-        output_label['text'] = format_distance_limits(self.distances, self.upper_limits)
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
 
     # find and remove the group_tab figure canvas
     def remove_old_group_figure_canvas(self):
@@ -483,3 +504,59 @@ class MetroGenApp:
             combo_nodes = self.root.nametowidget("notebook_gen.source_frame.from_file.cluster")
             combo_nodes["values"] = self.cluster_list
         return text
+
+    def best_fit_topology_n(self, degrees, weights, types, node_ref_number, add_prefix, extra_node_info,
+                            algorithm=nc.KAMADA_ALGO):
+        topo, distances, assigned_types, pos, colors  = None, None, None, None, None
+
+        ref_mape = 1000
+        for i in range(self.iterations_distance):
+            # Generate the network using the predefined parameters.
+            topo, distances, assigned_types, pos, colors =\
+                self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
+                                             algorithm, node_ref_number, add_prefix, extra_node_info)
+
+            # Calculate weights from requested proportions and regenerate distances optimizing the
+            # mean error
+            req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+            distances = optimize_distance_ranges(self.upper_limits, req_weights, distances)
+            # Calculate error metrics to try to select the best topology
+            new_distance_weight = [dist / 100 for dist in count_distance_ranges(distances, self.upper_limits)]
+            mae, mape_distance, rsme_distance, actual_dist = check_metrics(self.upper_limits, req_weights,
+                                                                           new_distance_weight, perc=True)
+
+            if mape_distance < ref_mape:
+                self.topo, self.distances, self.assigned_types, \
+                    self.pos, self.colors = topo, distances, assigned_types, \
+                    pos, colors
+                ref_mape = mape_distance
+
+    # Open the window that will modify the distance ranges.
+    def open_dist_window(self):
+        if self.setter is None:
+            # self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.max_upper)
+            self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.req_distance_props,
+                                               max(self.distances), self.iterations_distance)
+        else:
+            self.setter.show(self.upper_limits, self.req_distance_props, max(self.distances), self.iterations_distance)
+
+    def set_upper_limits(self, upper_limits, req_proportions, max_distance, iterations=None):
+        if iterations is not None:
+            self.iterations_distance = iterations
+        # variable for the upper limits of the distances.
+        self.upper_limits = upper_limits
+        # Requested proportions for distances
+        self.req_distance_props = req_proportions
+        # Calculate distances based on this parameter
+        self.set_distance_parameters()
+        # Update the description of % per link
+        output_label = self.root.nametowidget("notebook_gen.image_frame.print_distances")
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
+
+    def set_distance_parameters(self):
+        self.distances = calculate_edge_distances(self.topo, self.pos, max(self.distances))
+        # Calculate weights from requested proportions and regenerate distances optimizing the
+        # mean error
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)

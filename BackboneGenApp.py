@@ -240,7 +240,7 @@ class BackboneGenApp:
         frame = ttk.Frame(parent, name=frame_name)
         label_EPS = tk.Label(frame, text="Select max epsilon to group")
         label_EPS.grid(row=0, column=0)
-        slider =tk.Scale(frame, name="max_group", from_=0.001, to=0.5,
+        slider = tk.Scale(frame, name="max_group", from_=0.001, to=0.5,
                          orient=tk.HORIZONTAL, resolution=0.001)
         slider.set(0.03)
         slider.grid(row=0, column=1)

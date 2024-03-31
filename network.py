@@ -796,7 +796,7 @@ def optimize_distance_ranges(upper_distances, weights, distances):
         mae, mape_distance, rsme_distance, actual_dist = check_metrics(upper_distances, weights,
                                                                        actual_distance_weight, perc=True)
         if mape_distance < ref_mape:
-            new_distances = alt_distances
+            new_distances = [i if i > 0 else 0.01 for i in alt_distances]
             ref_mape = mape_distance
         upper_limit = upper_limit - step
 
