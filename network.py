@@ -491,7 +491,6 @@ def gen_waxman_paven_topology(nodes, regions, beta=0.4, alpha=0.4,
     survival_edges = list(nx.k_edge_augmentation(graph, 2))
     graph.add_edges_from(survival_edges)
 
-
     # Set colors based in regions
     # colors = [i * 2 for i, count in enumerate(nodes_regions, 1) for _ in range(count)]
     # nx.draw(graph, pos=indexed_pos, node_color=colors, with_labels=True)
@@ -765,7 +764,6 @@ def region_to_row_column(region, columns):
 
 
 def check_metrics(elements, weight, real_distribution, perc=False):
-
     to_compare = []
     generated_weight = []
     if perc:
@@ -801,3 +799,49 @@ def optimize_distance_ranges(upper_distances, weights, distances):
         upper_limit = upper_limit - step
 
     return new_distances
+
+
+# Read the network topology from an XLS file
+# file - the filename
+# type - backbone or metro
+def read_network_xls(file, ntype=nc.BACKBONE):
+    # Dataframes to read the info from file
+    nodes_df = None
+    links_df = None
+    # Result
+    read = False
+    # Read the Nodes and Links excel sheets if the file exists
+    if os.path.isfile(file):
+        with pd.ExcelFile(file) as xls:
+            nodes_df = pd.read_excel(xls, sheet_name=nc.NODES_EXCEL_NAME)
+            links_df = pd.read_excel(xls, sheet_name=nc.LINKS_EXCEL_NAME)
+            read = True
+    # create the topology and the arrays for distances, types, clusters and the auxiliary coordinates
+    topo = nx.Graph()
+    distances = []
+    assigned_types = []
+    clusters = []
+    coord = []
+
+    # Get the ids of the nodes
+    names = nodes_df[nc.XLS_NODE_NAME]
+    # Add all the nodes to the topology
+    topo.add_nodes_from(names)
+    # Add all the links to the topology
+    topo.add_edges_from(list(zip(links_df[nc.XLS_SOURCE_ID], links_df[nc.XLS_DEST_ID])))
+    # Include the distances
+    distances.extend(links_df[nc.XLS_DISTANCE])
+    # Retrieve the types
+    assigned_types.extend(nodes_df[nc.XLS_CO_TYPE])
+    # Get the clusters
+    clusters.extend(nodes_df[nc.XLS_CLUSTER])
+
+    # Depending on the type of topology read different coordinates
+    if ntype == nc.BACKBONE:
+        coord = list(zip(nodes_df[nc.XLS_X_BACK], nodes_df[nc.XLS_Y_BACK]))
+    elif ntype == nc.METRO_CORE:
+        coord = list(zip(nodes_df[nc.XLS_X_MCORE], nodes_df[nc.XLS_Y_MCORE]))
+    # Generate the position data structure from the coordinates and name
+    pos = {name: np.array([x, y]) for name, (x, y) in zip(names, coord)}
+    # Return the results
+    return read, topo, distances, assigned_types, pos, clusters

@@ -14,7 +14,7 @@ from KeyValueList import KeyValueList
 from generator import write_network
 import pandas as pd
 from network import format_distance_limits, calculate_edge_distances, optimize_distance_ranges, count_distance_ranges, \
-    check_metrics
+    check_metrics, read_network_xls, color_nodes
 import Texts_EN as texts
 
 
@@ -92,7 +92,7 @@ class BackboneGenApp:
 
         # The fourth tab is the one used to save all the information into an Excel file
         tab4 = self.create_tab_save(notebook)
-        notebook.add(tab4, text="Save")
+        notebook.add(tab4, text="Save/Load")
 
         # Pack the notebook into the main window
         notebook.pack(expand=True, fill=tk.BOTH)
@@ -132,6 +132,8 @@ class BackboneGenApp:
         frame = ttk.Frame(parent)
         save_button = tk.Button(frame, text=texts.SAVE_TO_FILE, command=self.save_to_file)
         save_button.pack(pady=10)
+        load_button = tk.Button(frame, text=texts.LOAD_FROM_FILE, command=self.load_topology)
+        load_button.pack(pady=10)
         return frame
 
     def create_tab_image(self, parent):
@@ -241,7 +243,7 @@ class BackboneGenApp:
         label_EPS = tk.Label(frame, text="Select max epsilon to group")
         label_EPS.grid(row=0, column=0)
         slider = tk.Scale(frame, name="max_group", from_=0.001, to=0.5,
-                         orient=tk.HORIZONTAL, resolution=0.001)
+                          orient=tk.HORIZONTAL, resolution=0.001)
         slider.set(0.03)
         slider.grid(row=0, column=1)
         label_single = tk.Label(frame, text="Avoid single nodes")
@@ -308,7 +310,7 @@ class BackboneGenApp:
 
         self.update_image_frame()
 
-    # Regenerate the group graph
+    # Regenerate the groups and the group graph
     def group_graph(self):
         # Find the combo that defines the eps
         slider = self.root.nametowidget("notebook_gen.group_tab.max_group")
@@ -323,6 +325,10 @@ class BackboneGenApp:
         groups, self.clusters = self.cluster_gen.find_groups(self.topo, self.assigned_types, self.pos,
                                                              eps=float(slider.get()),
                                                              avoid_single=self.remove_single_clusters.get())
+        self.redraw_group_graph()
+
+    # Regenerate the group graph without recreating the clusters
+    def redraw_group_graph(self):
         # Retrieve a reference to the frame and to the label included in that frame
         frame = self.root.nametowidget("notebook_gen.group_tab")
         label = self.root.nametowidget("notebook_gen.group_tab.print_groups")
@@ -368,12 +374,13 @@ class BackboneGenApp:
         if self.setter is None:
             # self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.max_upper)
             self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.req_distance_props,
-                                                   self.max_upper, self.iterations_distance)
+                                               self.max_upper, self.iterations_distance)
         else:
             self.setter.show(self.upper_limits, self.req_distance_props, self.max_upper, self.iterations_distance)
 
     # Method to repaint the image frame with the new image
-    def update_image_frame(self):
+    # recluster (run the reclustering algorithm or just recreate the image with the existing values)
+    def update_image_frame(self, recluster=True):
         old_canvas = None
 
         frame = self.root.nametowidget("notebook_gen.image_frame")
@@ -419,7 +426,10 @@ class BackboneGenApp:
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
         # Call to the creation of the grouping/cluster graph with existing values
-        self.group_graph()
+        if recluster:
+            self.group_graph()
+        else:
+            self.redraw_group_graph()
         self.fill_link_list_combo()
         self.fill_node_source_combo()
         self.fill_node_dest_combo(None)
@@ -536,3 +546,30 @@ class BackboneGenApp:
                     aux_node_sheet, aux_link_sheet, \
                     aux_pos, aux_colors
                 ref_mape = mape_distance
+
+    # Load a topology from file
+    def load_topology(self):
+        # Ask for the filepath to the file to read
+        file_path = filedialog.askopenfilename(title="Open Topology", defaultextension=".xlsx",
+                                               filetypes=[("Excel files", ".xlsx .xls")])
+
+        # If it does not exist then show an error
+        if not file_path:
+            tk.messagebox.showerror('', texts.ERROR_READING)
+            return
+
+        # Read the BB information from the file
+        res, topo, distances, assigned_types, pos, clusters = read_network_xls(file_path, ntype=nc.BACKBONE)
+
+        # If the result if False, then show an error
+        if not res:
+            tk.messagebox.showerror('', texts.ERROR_READING)
+        else:
+            # Otherwise assign the parameters
+            self.topo, self.distances, self.assigned_types, self.clusters, self.pos = \
+                topo, distances, assigned_types, clusters, pos
+            # Generate the colors
+            self.colors = color_nodes(assigned_types, self.color_codes)
+            # And update the images without reclustering
+            self.update_image_frame(recluster=False)
+        return
