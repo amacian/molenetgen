@@ -30,7 +30,6 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
                                        weights=perc_horse_length, k=1)[0]
         # Select a length from the range using a uniform distribution
         total_length = int(random.uniform(length_ranges[range_idx - 1] + 1, length_ranges[range_idx]))
-
         # Select as many cut points as local COs to define the place in the line where they
         # will be located
         cut_points = [element / 100 for element in random.sample(range(1, (total_length * 100)), hops - 1)]

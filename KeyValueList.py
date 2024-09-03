@@ -3,9 +3,9 @@ from tkinter import messagebox
 
 
 class KeyValueList:
-    def __init__(self, root, key_name, value_name, initial_row, initial_value_list):
+    def __init__(self, root, key_name, value_name, initial_row, initial_value_list, sortme=False):
         self.root = root
-
+        self.sort = sortme
         # Data structure to store key-value pairs
         self.key_value_list = initial_value_list
 
@@ -94,6 +94,8 @@ class KeyValueList:
 
     def update_listbox(self):
         self.listbox.delete(0, tk.END)
+        if self.sort:
+            self.sort_entries()
         for key, value in self.key_value_list:
             self.listbox.insert(tk.END, f"{key}: {value}")
 
@@ -103,3 +105,7 @@ class KeyValueList:
 
     def get_entries(self):
         return self.key_value_list
+
+    def sort_entries(self):
+        print(self.key_value_list)
+        print(self.key_value_list.sort(key=lambda x: int(x[0])))

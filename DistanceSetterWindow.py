@@ -18,7 +18,8 @@ class DistanceSetterWindow:
         self.window.geometry("600x300")
 
         self.distance_list = KeyValueList(self.window, "Ranges (upper limit)", "Proportions", 1,
-                                          [(str(key), str(value)) for key, value in zip(upper_limits, proportions)])
+                                          [(str(key), str(value)) for key, value in zip(upper_limits, proportions)],
+                                          sortme=True)
         label_iterations = tk.Label(self.window, text="Iterations to run to fit a topology")
         label_iterations.grid(row=5, columnspan=2)
         self.iteration_var = tk.StringVar()

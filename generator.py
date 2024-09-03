@@ -21,12 +21,12 @@ def format_node_list(nodes):
     process = 0
     for i in nodes:
         if process != 0:
-            result = result + ","
+            result = result + ", "
         process = process + 1
         result = result + i
-        if process == 10:
+        if process == 9:
             result = result + "\n"
-            process = 1
+            process = 0
     return result
 
 

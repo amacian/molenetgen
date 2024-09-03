@@ -14,4 +14,8 @@ if __name__ == '__main__':
     length_ranges = [0, 50, 100, 200, 302]
     length_percentages = [25, 40, 29, 6]
 
-    app = MetroAggGenApp(length_ranges,  length_percentages, dict_colors)
+    hop_ranges = [2, 3, 4, 5, 6, 7, 8]
+    hop_percentages = [10, 19, 21, 27, 14, 5, 4]
+
+    app = MetroAggGenApp(length_ranges, length_percentages, hop_number=hop_ranges, hop_percents=hop_percentages,
+                         dict_colors=dict_colors)
