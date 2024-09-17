@@ -10,10 +10,11 @@ from ValueList import ValueList
 from generator import write_network
 import pandas as pd
 from network import format_distance_limits, count_distance_ranges, check_metrics, optimize_distance_ranges, \
-    calculate_edge_distances
+    calculate_edge_distances, opt_function
 import networkconstants as nc
 import Texts_EN as texts
 from DistanceSetterWindow import DistanceSetterWindow
+from scipy.optimize import minimize
 
 
 # Class for the Tkinter Topology Generator Application
@@ -32,7 +33,7 @@ class MetroGenApp:
         if initial_refs is None:
             initial_refs = []
 
-        self.metro_gen = DefaultMetroCoreGenerator() # CoordinatesMetroCoreGenerator()
+        self.metro_gen = DefaultMetroCoreGenerator()  # CoordinatesMetroCoreGenerator()
 
         # Reference national nodes initialized to None
         self.national_ref_nodes = None
@@ -89,7 +90,7 @@ class MetroGenApp:
             self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, dict_colors,
                                          algo=nc.KAMADA_ALGO)'''
         self.best_fit_topology_n(degrees, weights, types, node_ref_number=[], add_prefix="", extra_node_info=None,
-                                 algorithm=nc.KAMADA_ALGO)
+                                 algorithms=[nc.KAMADA_ALGO])
         # Variable to hold the assigned clusters
         self.clusters = None
         self.radio_val = tk.StringVar(value="0")
@@ -299,7 +300,8 @@ class MetroGenApp:
         # Algorithm
         label_algo = tk.Label(frame, text="Algorithm")
         combo = ttk.Combobox(frame, name="algo", state="readonly",
-                             values=[nc.SPECTRAL_ALGO, nc.KAMADA_ALGO, nc.SPRING_ALGO, nc.SPIRAL_ALGO, nc.SHELL_ALGO])
+                             values=[nc.ALL_GEN, nc.SPECTRAL_ALGO, nc.KAMADA_ALGO, nc.SPRING_ALGO, nc.SPIRAL_ALGO,
+                                     nc.SHELL_ALGO])
         combo.current(1)
         label_algo.grid(row=(18 + initial_row), column=0, pady=5)
         combo.grid(row=(18 + initial_row), column=1, pady=5)
@@ -394,8 +396,9 @@ class MetroGenApp:
             '''self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
                 self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
                                              algorithm, node_ref_number, add_prefix, extra_node_info)'''
+            algorithms = nc.MAIN_ALGORITHMS if algorithm == nc.ALL_GEN else [algorithm]
             self.best_fit_topology_n(degrees, weights, types, node_ref_number, add_prefix, extra_node_info,
-                                     algorithm)
+                                     algorithms)
             self.national_ref_nodes = ["" for i in self.topo.nodes]
         # Get x and y coordinates for all the elements
         x_pos = [pos[0] for pos in list(self.pos.values())]
@@ -506,30 +509,41 @@ class MetroGenApp:
         return text
 
     def best_fit_topology_n(self, degrees, weights, types, node_ref_number, add_prefix, extra_node_info,
-                            algorithm=nc.KAMADA_ALGO):
-        topo, distances, assigned_types, pos, colors  = None, None, None, None, None
+                            algorithms):
+        topo, distances, assigned_types, pos, colors = None, None, None, None, None
 
         ref_mape = 1000
-        for i in range(self.iterations_distance):
-            # Generate the network using the predefined parameters.
-            topo, distances, assigned_types, pos, colors =\
-                self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
-                                             algorithm, node_ref_number, add_prefix, extra_node_info)
+        for algorithm in algorithms:
+            for i in range(self.iterations_distance):
+                # Generate the network using the predefined parameters.
+                topo, distances, assigned_types, pos, colors = \
+                    self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
+                                                 algorithm, node_ref_number, add_prefix, extra_node_info)
 
-            # Calculate weights from requested proportions and regenerate distances optimizing the
-            # mean error
-            req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
-            distances = optimize_distance_ranges(self.upper_limits, req_weights, distances)
-            # Calculate error metrics to try to select the best topology
-            new_distance_weight = [dist / 100 for dist in count_distance_ranges(distances, self.upper_limits)]
-            mae, mape_distance, rsme_distance, actual_dist = check_metrics(self.upper_limits, req_weights,
-                                                                           new_distance_weight, perc=True)
+                # Calculate weights from requested proportions and regenerate distances optimizing the
+                # mean error
+                req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+                # Optimization by minimizing the optional function
+                np_pos = np.array(list(pos.values()))
+                opt_min = minimize(opt_function, np_pos.flatten(),
+                                   args=(topo, self.upper_limits, self.req_distance_props),
+                                   method='L-BFGS-B', options={'eps': 1})
+                print("Iteration ", i, " for algorithm ", algorithm)
+                new_pos = {node: position for node, position in
+                           zip(list(topo.nodes), opt_min.x.reshape((len(topo.nodes), 2)))}
+                opt_distances = calculate_edge_distances(topo, new_pos,
+                                                         max(self.upper_limits))
+                distances = optimize_distance_ranges(self.upper_limits, req_weights, distances)
+                # Calculate error metrics to try to select the best topology
+                new_distance_weight = [dist / 100 for dist in count_distance_ranges(distances, self.upper_limits)]
+                mae, mape_distance, rsme_distance, actual_dist = check_metrics(self.upper_limits, req_weights,
+                                                                               new_distance_weight, perc=True)
 
-            if mape_distance < ref_mape:
-                self.topo, self.distances, self.assigned_types, \
-                    self.pos, self.colors = topo, distances, assigned_types, \
-                    pos, colors
-                ref_mape = mape_distance
+                if mape_distance < ref_mape:
+                    self.topo, self.distances, self.assigned_types, \
+                        self.pos, self.colors = topo, distances, assigned_types, \
+                        pos, colors
+                    ref_mape = mape_distance
 
     # Open the window that will modify the distance ranges.
     def open_dist_window(self):

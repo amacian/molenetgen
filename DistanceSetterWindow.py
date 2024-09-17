@@ -38,6 +38,7 @@ class DistanceSetterWindow:
         distances = [int(key) for key, value in items]
         proportions = [float(value) for key, value in items]
         self.generator.set_upper_limits(distances, proportions, max(distances), iterations)
+        self.window.destroy()
 
     def show(self, upper_limits, proportions, max_distance, iterations):
         self.create_window(upper_limits, proportions, max_distance, iterations)

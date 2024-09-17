@@ -24,10 +24,10 @@ class KeyValueList:
         # self.label_nodes = tk.Label(root, text=node_name)
 
         # Layout
-        self.label_key.grid(row=initial_row, column=0, padx=10, pady=1)
-        self.entry_key.grid(row=initial_row, column=1, padx=10, pady=1)
-        self.label_values.grid(row=(initial_row+1), column=0, pady=5)
-        self.entry_value.grid(row=(initial_row+1), column=1, pady=5)
+        self.label_key.grid(row=initial_row, column=0, padx=10, pady=10, sticky="n")
+        self.entry_key.grid(row=initial_row, column=1, padx=10, pady=10, sticky="n")
+        self.label_values.grid(row=(initial_row+1), column=0, pady=5, sticky="n")
+        self.entry_value.grid(row=(initial_row+1), column=1, pady=5, sticky="n")
 
         self.listbox.grid(row=(0+initial_row), column=2, rowspan=7, columnspan=1, padx=10, pady=5, sticky="nsew")
         self.btn_add.grid(row=(2+initial_row), column=0, pady=5)
@@ -81,7 +81,7 @@ class KeyValueList:
         else:
             messagebox.showwarning("Selection Error", "Please select an entry to update.")
 
-    def load_selected_entry(self):
+    def load_selected_entry(self, event):
         selected_index = self.listbox.curselection()
 
         if selected_index:

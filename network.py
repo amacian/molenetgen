@@ -2,6 +2,7 @@ import collections
 
 import numpy as np
 from scipy import spatial
+from scipy.spatial.distance import euclidean
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, root_mean_squared_error
 
 import networkconstants as nc
@@ -41,6 +42,7 @@ def gen_topology(degrees, weights, nodes):
     # create the bidirectional network topology using the configuration model
     # it may create parallel edges and self-loops.
     g = nx.configuration_model(sequence)
+    # g = nx.random_degree_sequence_graph(sequence)
     # remove parallel edges
     g = nx.Graph(g)
     # Remove self-loops
@@ -845,3 +847,24 @@ def read_network_xls(file, ntype=nc.BACKBONE):
     pos = {name: np.array([x, y]) for name, (x, y) in zip(names, coord)}
     # Return the results
     return read, topo, distances, assigned_types, pos, clusters
+
+
+last_vals = None
+
+
+# Optimization function to approximate distances to expected ranges
+def opt_function(pos, topo, upper_distances, weights):
+    # rearrange the position in the proper format
+    pos = pos.reshape((len(topo.nodes), 2))
+    # Get the node names
+    nodes = list(topo.nodes)
+    # Calculate the distance values in the original axis
+    distances = [distance.euclidean(pos[nodes.index(u)], pos[nodes.index(v)]) for (u, v) in list(topo.edges)]
+    # Re-dimension by applying a factor based on the maximum distance
+    factor = max(upper_distances) / max(distances)
+    actual_distances = [(dist * factor) for dist in distances]
+    # Calculate the distribution into ranges
+    actual_distance_weight = [dist for dist in count_distance_ranges(actual_distances, upper_distances)]
+    # Get the absolute difference between expected and current ranges
+    res = sum([abs(u - v) for u, v in zip(actual_distance_weight, weights)])
+    return res

@@ -12,6 +12,13 @@ SPRING_ALGO = "spring"
 SPIRAL_ALGO = "spiral"
 SHELL_ALGO = "shell"
 SPECTRAL_ALGO = "spectral"
+RANDOM_ALGO = "random"
+MAIN_ALGORITHMS = [SPECTRAL_ALGO, KAMADA_ALGO, SPRING_ALGO]
+
+DEFAULT_GEN = "Default"
+DUAL_GEN = "Dual"
+REGION_GEN = "Region"
+ALL_GEN = "Check ALL"
 
 NODES_EXCEL_NAME = "Nodes"
 LINKS_EXCEL_NAME = "Links"

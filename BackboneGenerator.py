@@ -70,6 +70,8 @@ class DefaultBackboneGenerator(BackboneGenerator):
                 pos = nx.spiral_layout(topo)
             case nc.SHELL_ALGO:
                 pos = nx.shell_layout(topo)
+            case nc.RANDOM_ALGO:
+                pos = nx.random_layout(topo)
             case _:
                 pos = nx.spectral_layout(topo)
 
@@ -138,6 +140,8 @@ class DualBackboneGenerator(BackboneGenerator):
                 pos = nx.spiral_layout(topo)
             case nc.SHELL_ALGO:
                 pos = nx.shell_layout(topo)
+            case nc.RANDOM_ALGO:
+                pos = nx.random_layout(topo)
             case _:
                 pos = nx.spectral_layout(topo)
 
@@ -261,9 +265,9 @@ class WaxmanPavenGenerator(BackboneGenerator):
             # by updating alpha or beta.
 
             if avg_degree > average(degree_sequence):
-                increase = previous_increase if previous_increase > 0 else -previous_increase/2
+                increase = previous_increase if previous_increase > 0 else -previous_increase / 2
             else:
-                increase = previous_increase if previous_increase < 0 else -previous_increase/2
+                increase = previous_increase if previous_increase < 0 else -previous_increase / 2
             new_alpha += increase
             topo = None
 
@@ -293,5 +297,5 @@ class WaxmanPavenGenerator(BackboneGenerator):
 
     @staticmethod
     def rename_position_indexed(pos, names):
-        pos = {name: value for name, value in zip (names, pos.values())}
+        pos = {name: value for name, value in zip(names, pos.values())}
         return pos

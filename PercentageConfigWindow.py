@@ -31,6 +31,7 @@ class PercentageConfigWindow:
         distances = [int(key) for key, value in items]
         proportions = [float(value) for key, value in items]
         self.generator.set_upper_limits(distances, proportions, self.id_text)
+        self.window.destroy()
 
     def show(self, upper_limits, proportions, text_limit, text_prop):
         self.id_text = text_limit

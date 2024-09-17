@@ -1,9 +1,11 @@
 import matplotlib
 import networkx as nx
+import numpy as np
 from matplotlib import pyplot as plt
 import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from scipy.optimize import minimize
 
 import Texts_EN
 import networkconstants as nc
@@ -14,7 +16,7 @@ from KeyValueList import KeyValueList
 from generator import write_network
 import pandas as pd
 from network import format_distance_limits, calculate_edge_distances, optimize_distance_ranges, count_distance_ranges, \
-    check_metrics, read_network_xls, color_nodes
+    check_metrics, read_network_xls, color_nodes, opt_function
 import Texts_EN as texts
 
 
@@ -64,7 +66,7 @@ class BackboneGenApp:
         self.fig_height = 10
         self.fig_width = 10
 
-        self.best_fit_topology_n(degrees, weights, nodes, types, dict_colors)
+        self.best_fit_topology_n(degrees, weights, nodes, types, dict_colors, [nc.SPECTRAL_ALGO])
 
         # Variable to hold the assigned clusters
         self.clusters = None
@@ -195,7 +197,10 @@ class BackboneGenApp:
     def create_tab_list(self, parent, key_names, value_names, node_names, frame_name, type_names,
                         typeval_name, degrees, weights, types, number_nodes_def):
         frame = ttk.Frame(parent, name=frame_name)
-        initial_row = 0
+        label_degrees = tk.Label(frame, text="Configure the proportion of nodes per degree level",
+                                 fg="orange")
+        label_degrees.grid(row=0, columnspan=5)
+        initial_row = 1
 
         # Degrees
         degree_list = KeyValueList(frame, key_names, value_names, initial_row,
@@ -205,37 +210,42 @@ class BackboneGenApp:
         separator = ttk.Separator(frame, orient="horizontal")
         separator.grid(row=(7 + initial_row), columnspan=5, ipadx=300, pady=10)
 
+        label_type = tk.Label(frame, text="Configure the proportion of nodes per node type",
+                              fg="orange")
+        label_type.grid(row=(8 + initial_row), columnspan=5)
+
         # Types
-        type_list = KeyValueList(frame, type_names, typeval_name, initial_row + 8,
+        type_list = KeyValueList(frame, type_names, typeval_name, initial_row + 9,
                                  [(str(key), str(value)) for key, value in zip(types.code, types.proportion)])
 
         # Separator
         separator = ttk.Separator(frame, orient="horizontal")
-        separator.grid(row=(16 + initial_row), columnspan=5, ipadx=300, pady=10)
+        separator.grid(row=(17 + initial_row), columnspan=5, ipadx=300, pady=10)
 
         # Number of nodes
         label_nodes = tk.Label(frame, text=node_names)
         entry_node = tk.Entry(frame, name="entry_node")
         entry_node.insert(0, number_nodes_def)
 
-        label_nodes.grid(row=(17 + initial_row), column=0, pady=5)
-        entry_node.grid(row=(17 + initial_row), column=1, pady=5)
+        label_nodes.grid(row=(18 + initial_row), column=0, pady=5)
+        entry_node.grid(row=(18 + initial_row), column=1, pady=5)
 
         # Algorithm
         label_algo = tk.Label(frame, text="Algorithm")
         combo = ttk.Combobox(frame, name="algo", state="readonly",
-                             values=[nc.SPECTRAL_ALGO, nc.KAMADA_ALGO, nc.SPRING_ALGO, nc.SPIRAL_ALGO, nc.SHELL_ALGO])
+                             values=[nc.SPECTRAL_ALGO, nc.KAMADA_ALGO, nc.SPRING_ALGO, nc.RANDOM_ALGO,
+                                     nc.SPIRAL_ALGO, nc.SHELL_ALGO])
         combo.current(0)
-        label_algo.grid(row=(18 + initial_row), column=0, pady=5)
-        combo.grid(row=(18 + initial_row), column=1, pady=5)
+        label_algo.grid(row=(19 + initial_row), column=0, pady=5)
+        combo.grid(row=(19 + initial_row), column=1, pady=5)
 
         # Generator
         label_gen = tk.Label(frame, text="Generator")
         combo_gen = ttk.Combobox(frame, name="gen", state="readonly",
-                                 values=["Default", "Dual", "Region"])
+                                 values=[nc.DEFAULT_GEN, nc.DUAL_GEN, nc.REGION_GEN, nc.ALL_GEN])
         combo_gen.current(0)
-        label_gen.grid(row=(19 + initial_row), column=0, pady=5)
-        combo_gen.grid(row=(19 + initial_row), column=1, pady=5)
+        label_gen.grid(row=(20 + initial_row), column=0, pady=5)
+        combo_gen.grid(row=(20 + initial_row), column=1, pady=5)
         return frame, degree_list, type_list
 
     def create_tab_grouping(self, parent, frame_name):
@@ -277,13 +287,21 @@ class BackboneGenApp:
     # algorithm - The algorithm to be used in the graph generation
     def rerun_backbone(self, frame, degree_list: KeyValueList, node_number,
                        type_list: KeyValueList, algorithm, generator):
-        if generator == "Default":
-            self.back_gen = DefaultBackboneGenerator()
-        elif generator == "Region":
-            self.back_gen = WaxmanPavenGenerator()
-        else:
+        generators = []
+        algorithm_sel = [algorithm.get()]
+        if generator == nc.DUAL_GEN:
             self.back_gen = DualBackboneGenerator()
-
+            generators.append(self.back_gen)
+        elif generator == nc.REGION_GEN:
+            self.back_gen = WaxmanPavenGenerator()
+            generators.append(self.back_gen)
+        elif generator == nc.DEFAULT_GEN:
+            self.back_gen = DefaultBackboneGenerator()
+            generators.append(self.back_gen)
+        else:
+            generators = [DefaultBackboneGenerator(), DualBackboneGenerator(), WaxmanPavenGenerator(), ]
+            self.back_gen = generators[0]
+            algorithm_sel = nc.MAIN_ALGORITHMS
         # Types and percentages for the nodes
         type_key_vals = type_list.get_entries()
         # Build the expected data structure
@@ -303,7 +321,8 @@ class BackboneGenApp:
             print("Error in number of nodes, using default: ", nodes)
 
         # Call the backbone function with the expected parameters
-        self.best_fit_topology_n(degrees, weights, nodes, types, self.color_codes, algorithm.get())
+        self.best_fit_topology_n(degrees, weights, nodes, types, self.color_codes,
+                                 algorithm_sel, generators)
 
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)
@@ -512,40 +531,58 @@ class BackboneGenApp:
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
 
-    def best_fit_topology_n(self, degrees, weights, nodes, types, dict_colors, algorithm="spectral"):
+    def best_fit_topology_n(self, degrees, weights, nodes, types, dict_colors,
+                            algorithms, generators=None):
+        algorithm = algorithms[0]
+        if generators is None:
+            generators = [self.back_gen]
+        generator = generators[0]
         aux_topo, aux_distances, aux_assigned_types, \
             aux_node_sheet, aux_link_sheet, \
             aux_pos, aux_colors = None, None, None, None, None, None, None
         ref_mape = 1000
-        for i in range(self.iterations_distance):
-            # Generate the backbone network using the predefined parameters.
-            # Retrieve the generated topology, a list with distance per edge,
-            # the list of type per node, the name of the node and link sheets at the excel file
-            # the position of the nodes and the assigned colors
-            aux_topo, aux_distances, aux_assigned_types, \
-                aux_node_sheet, aux_link_sheet, \
-                aux_pos, aux_colors = self.back_gen.generate(degrees, weights, nodes,
-                                                             self.upper_limits, types,
-                                                             algo=algorithm,
-                                                             dict_colors=dict_colors,
-                                                             max_distance=self.max_upper)
+        for generator in generators:
+            for algorithm in algorithms:
+                for i in range(self.iterations_distance):
+                    # Generate the backbone network using the predefined parameters.
+                    # Retrieve the generated topology, a list with distance per edge,
+                    # the list of type per node, the name of the node and link sheets at the excel file
+                    # the position of the nodes and the assigned colors
+                    aux_topo, aux_distances, aux_assigned_types, \
+                        aux_node_sheet, aux_link_sheet, \
+                        aux_pos, aux_colors = generator.generate(degrees, weights, nodes,
+                                                                 self.upper_limits, types,
+                                                                 algo=algorithm,
+                                                                 dict_colors=dict_colors,
+                                                                 max_distance=self.max_upper)
 
-            # Calculate weights from requested proportions and regenerate distances optimizing the
-            # mean error
-            req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
-            aux_distances = optimize_distance_ranges(self.upper_limits, req_weights, aux_distances)
-            # Calculate error metrics to try to select the best topology
-            new_distance_weight = [dist / 100 for dist in count_distance_ranges(aux_distances, self.upper_limits)]
-            mae, mape_distance, rsme_distance, actual_dist = check_metrics(self.upper_limits, req_weights,
-                                                                           new_distance_weight, perc=True)
+                    # Calculate weights from requested proportions and regenerate distances optimizing the
+                    # mean error
+                    req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+                    np_pos = np.array(list(aux_pos.values()))
+                    opt_min = minimize(opt_function, np_pos.flatten(),
+                                       args=(aux_topo, self.upper_limits, self.req_distance_props),
+                                       method='L-BFGS-B', options={'eps':1})
+                    print("Iteration ", i, " for algorithm ", algorithm, " in generator ", generator)
+                    new_pos = {node:position for node, position in zip(list(aux_topo.nodes), opt_min.x.reshape((len(aux_topo.nodes), 2)))}
+                    opt_distances = calculate_edge_distances(aux_topo, new_pos,
+                                                             self.max_upper)
+                    # print(opt_min.x.reshape((len(aux_topo.nodes), 2)))
+                    # aux_distances = opt_min.x.reshape((len(aux_topo.nodes), 2))
+                    aux_distances = optimize_distance_ranges(self.upper_limits, req_weights, opt_distances)
+                    # Calculate error metrics to try to select the best topology
+                    new_distance_weight = [dist / 100 for dist in
+                                           count_distance_ranges(aux_distances, self.upper_limits)]
+                    mae, mape_distance, rsme_distance, actual_dist = check_metrics(self.upper_limits, req_weights,
+                                                                                   new_distance_weight, perc=True)
 
-            if mape_distance < ref_mape:
-                self.topo, self.distances, self.assigned_types, \
-                    self.node_sheet, self.link_sheet, \
-                    self.pos, self.colors = aux_topo, aux_distances, aux_assigned_types, \
-                    aux_node_sheet, aux_link_sheet, \
-                    aux_pos, aux_colors
-                ref_mape = mape_distance
+                    if mape_distance < ref_mape:
+                        self.topo, self.distances, self.assigned_types, \
+                            self.node_sheet, self.link_sheet, \
+                            self.pos, self.colors = aux_topo, aux_distances, aux_assigned_types, \
+                            aux_node_sheet, aux_link_sheet, \
+                            aux_pos, aux_colors
+                        ref_mape = mape_distance
 
     # Load a topology from file
     def load_topology(self):
