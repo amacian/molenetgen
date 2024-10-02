@@ -103,4 +103,4 @@ class DefaultBulkMetroAggGenService(BulkMetroAggGeneratorService):
             if not result:
                 return False, message
 
-            return True, ""
+        return True, ""
