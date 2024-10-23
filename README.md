@@ -9,9 +9,9 @@ This work has been developed under R&D projects:
 
 To cite this project use:
 A. Sánchez-Macián, N. Koneva, M. Quagliotti, J.M. Rivas-Moscoso, F. Arpanaei,
-J. A. Hernández, J.P. Fernández-Palacios, L. Zhang and  E. Riccardi 
-"MoleNetwork: A tool for the generation of  synthetic optical network topologies",
-Submitted to IEEE Journal on Selected Areas in Communications.
+J. A. Hernández, J.P. Fernández-Palacios, L. Zhang and E. Riccardi 
+"Generating realistic optical topologies for techno-economic studies using MoleNetwork",
+Submitted to Journal of Optical Communications and Networking.
 
 To download and execute the tool, create a directory to hold the project and run:
 git clone https://github.com/amacian/molenetgen
@@ -25,8 +25,6 @@ The repository includes several files with the following being the main scripts 
 - A main.py file to run the GUI for Backbone network generation. 
 - A mainMetroCore.py file for the Metro Core generator GUI.
 - A mainMetroAggregation.py file for the Metro Aggregation network generator GUI
-- A create_all_topology.py script that generates a sample topology from backbone to aggregation (Note: change the "directory" variable to point to the desired directory to store the outputs).
-- Two scripts (testOutputs1.py and testOutputs2.py to replicate the results of the paper).
 
 You may run any of these scripts by executing python3: e.g. "python3 main.py".
 You can also use an IDE of your preference.
