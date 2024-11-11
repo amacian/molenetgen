@@ -9,9 +9,9 @@ if __name__ == '__main__':
     # The possible node degrees
     degrees = [2, 3, 4, 5]
     # The frequency % of the node degrees in the total nodes
-    weights = [23, 41, 27, 9]
+    weights = [10, 18, 12, 4]
     # Total number of nodes
-    nodes = 48
+    nodes = 52
     # Length limits
     upper_limits = [50, 100, 200, 400, 600]
     # the frequency of each range of limits
@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     # Types and percentages for the nodes
     types = pd.DataFrame({'code': [nc.NATIONAL_CO_CODE, nc.REGIONAL_CO_CODE, nc.TRANSIT_CODE],
-                          'proportion': [0.826, 0.130, 0.044]})
+                          'proportion': [0.827, 0, 0.173]})
 
     # Create and store the backbone network
     dict_colors = {
@@ -31,7 +31,8 @@ if __name__ == '__main__':
     }
 
     # Topologies to create in order to get the best one and approximate to the requested distances
-    iters = 20
+    iters = 1
+    bounds = 0.05
 
     app = BackboneGenApp(degrees, weights, nodes, upper_limits, propor_limits, types, dict_colors,
-                         iterations_distance=iters)
+                         iterations_distance=iters, bounds=bounds)

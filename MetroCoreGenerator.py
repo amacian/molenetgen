@@ -140,7 +140,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
         # Assign types to nodes
         assigned_types = MetroCoreGenerator.metro_assign_types(pd.DataFrame({'code': types.code,
-                                                               'number': subnet_number}))
+                                                                             'number': subnet_number}))
 
         return topo, assigned_types
 
@@ -358,7 +358,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
 class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
 
-    def __init__(self, scale_factor = 0.65):
+    def __init__(self, scale_factor=0.65):
         # In case of retrieving BB nodes, fit them in the inner X% of the new image
         self.scale_factor = scale_factor
 
@@ -387,7 +387,7 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
                                          algo, national_nodes, add_prefix, extra_node_info)
 
         # Nodes excluding NCOs to generate the topology without the BB nodes
-        nodes_no_nco = sum([num for num, code in zip(types.number,types.code) if code != nc.NATIONAL_CO_CODE])
+        nodes_no_nco = sum([num for num, code in zip(types.number, types.code) if code != nc.NATIONAL_CO_CODE])
 
         # Additional prefix to name the generated nodes
         prefix = "_" + str((list(extra_node_info[nc.XLS_CLUSTER]))[0]) + "_"
@@ -415,7 +415,7 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
             # Otherwise, repeat the node generation
 
         # Types and related proportions (escluding NCOs)
-        types_no_nco= [code for code in types.code if code != nc.NATIONAL_CO_CODE]
+        types_no_nco = [code for code in types.code if code != nc.NATIONAL_CO_CODE]
         props_no_nco = [prop for code, prop in zip(types.code, types.proportion) if code != nc.NATIONAL_CO_CODE]
         # Assign types to nodes
         assigned_types = random.choices(types_no_nco, weights=props_no_nco, k=len(topo.nodes))
@@ -444,8 +444,8 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
         y_coord_topo = [y for x, y in topo_coords]
         min_x_topo = min(x_coord_topo)
         min_y_topo = min(y_coord_topo)
-        x_dist_topo = max(x_coord_topo)-min(x_coord_topo)
-        y_dist_topo = max(y_coord_topo)-min(y_coord_topo)
+        x_dist_topo = max(x_coord_topo) - min(x_coord_topo)
+        y_dist_topo = max(y_coord_topo) - min(y_coord_topo)
 
         # Coordinates of the National nodes when they were generated in the backbone
         # Retrieving minimum X, Y from the topology and X width and Y height
@@ -467,8 +467,8 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
         center_y_bb = min_y_bb if len(national_nodes) == 1 else y_dist_bb / 2 + min_y_bb
 
         # Rescaling factor of relative positions from the backbone positions to the metro generated ones.
-        factor_x = self.scale_factor * x_dist_topo/x_dist_bb if len(national_nodes) > 1 else 1
-        factor_y = self.scale_factor * y_dist_topo/y_dist_bb if len(national_nodes) > 1 else 1
+        factor_x = self.scale_factor * x_dist_topo / x_dist_bb if len(national_nodes) > 1 else 1
+        factor_y = self.scale_factor * y_dist_topo / y_dist_bb if len(national_nodes) > 1 else 1
 
         # Prepare a tree with all the coordinates of the generated topology
         tree = spatial.KDTree(topo_coords)
@@ -522,3 +522,18 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
         colors = color_nodes(assigned_types, dict_colors)
 
         return topo, distances, assigned_types, pos, colors
+
+
+class CoordinatesMetroCoreGenerator2(DefaultMetroCoreGenerator):
+
+    def __init__(self, scale_factor=0.65):
+        # In case of retrieving BB nodes, fit them in the inner X% of the new image
+        self.scale_factor = scale_factor
+
+    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
+                      national_nodes=[], add_prefix="", extra_node_info=None):
+
+        # No coordinates available, go to the default generator
+        if extra_node_info is None or nc.XLS_X_BACK not in extra_node_info or nc.XLS_Y_BACK not in extra_node_info:
+            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors,
+                                         algo, national_nodes, add_prefix, extra_node_info)
