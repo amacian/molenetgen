@@ -10,7 +10,7 @@ from ValueList import ValueList
 from generator import write_network
 import pandas as pd
 from network import format_distance_limits, count_distance_ranges, check_metrics, optimize_distance_ranges, \
-    calculate_edge_distances, opt_function
+    calculate_edge_distances, opt_function, read_network_xls, color_nodes
 import networkconstants as nc
 import Texts_EN as texts
 from DistanceSetterWindow import DistanceSetterWindow
@@ -29,11 +29,12 @@ class MetroGenApp:
     # types - dataframe with office codes (e.g. RCO) and proportions
     # dict_colors - dictionary that maps types to colors for the basic graph
     def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types,
-                 dict_colors={}, initial_refs=None, iterations_distance=nc.ITERATIONS_FOR_DISTANCE):
+                 dict_colors={}, initial_refs=None, iterations_distance=nc.ITERATIONS_FOR_DISTANCE,
+                 bounds=0.05):
         if initial_refs is None:
             initial_refs = []
 
-        self.metro_gen = DefaultMetroCoreGenerator()  # CoordinatesMetroCoreGenerator()
+        self.metro_gen = DefaultMetroCoreGenerator() # CoordinatesMetroCoreGenerator() #
 
         # Reference national nodes initialized to None
         self.national_ref_nodes = None
@@ -70,6 +71,9 @@ class MetroGenApp:
         # Number of topologies to generate in order to get the one with a distance distribution
         # nearest to the requested one
         self.iterations_distance = iterations_distance
+        # Bounds regarding movement of the nodes for optimization of link distances to
+        # avoid transforming the graph too much.
+        self.bounds = bounds
 
         # Variable to hold the value of the checkbox to select ring instead of mesh
         self.ring_var = tk.BooleanVar(self.root)
@@ -84,6 +88,13 @@ class MetroGenApp:
                                                                                dict_colors=dict_colors)'''
         total_proportion = sum(types.proportion)
         total = np.rint(nodes * types.proportion / total_proportion)
+
+        # Proportions might result in a bigger number of nodes, specially if "nodes" is low.
+        if sum(total) > nodes:
+            decimal_part = (nodes * types.proportion / total_proportion) % 1
+            nco_index = types.index[types['code'] == nc.NATIONAL_CO_CODE][0]
+            reduce_index = decimal_part[(decimal_part > 0.5) & (decimal_part.index != nco_index)].idxmin()
+            total[reduce_index] -= 1
         types["number"] = total.astype(int)
 
         '''self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
@@ -158,6 +169,8 @@ class MetroGenApp:
         frame = ttk.Frame(parent)
         save_button = tk.Button(frame, text="Save to File", command=self.save_to_file)
         save_button.pack(pady=10)
+        load_button = tk.Button(frame, text=texts.LOAD_FROM_FILE, command=self.load_topology)
+        load_button.pack(pady=10)
         return frame
 
     def create_tab_source(self, parent):
@@ -316,13 +329,13 @@ class MetroGenApp:
     # algorithm - The algorithm to be used in the graph generation
     def rerun_metro(self, frame, degree_list: KeyValueList, node_number,
                     type_list: KeyValueList, algorithm):
-        old_canvas = None
+        # old_canvas = None
         # Find the old canvas for the image and destroy it
-        for i in frame.winfo_children():
-            if isinstance(i, tk.Canvas):
-                old_canvas = i
-                break
-        old_canvas.destroy()
+        # for i in frame.winfo_children():
+        #     if isinstance(i, tk.Canvas):
+        #        old_canvas = i
+        #        break
+        # old_canvas.destroy()
         # Get the information of the nodes introduced by the user in the list of reference national nodes
         # when writing them in the GUI. They have priority over the number of national nodes.
         node_ref_number = self.node_refs
@@ -359,9 +372,32 @@ class MetroGenApp:
                                   'proportion': [float(value) for key, value in type_key_vals]})
             # Calculate the sum of values for proportions as it might not be 100%
             total_proportion = sum(types.proportion)
-            # Get a number of nodes per code based on the actual proportion and the total number
-            # of nodes and rounding to the nearest integer.
-            total = np.rint(int(node_number.get()) * types.proportion / total_proportion)
+
+            # Try to recover the number of nodes or use 50 as default
+            nodes = 50
+            try:
+                nodes = int(node_number.get())
+            except ValueError:
+                print("Error in number of nodes, using default: ", nodes)
+
+            total = np.rint(nodes * types.proportion / total_proportion)
+
+            # National nodes, if defined, should be considered as a fixed number of nodes.
+            if len(node_ref_number) > 0:
+                nodes_other_types = nodes - len(node_ref_number)
+                types_no_nco = types[types['code'] != nc.NATIONAL_CO_CODE]
+                total_no_nco_proportion = sum(types_no_nco.proportion)
+                total = np.rint(nodes_other_types * types_no_nco.proportion / total_no_nco_proportion)
+                if nc.NATIONAL_CO_CODE in list(types['code']):
+                    nco_index = types.index[types['code'] == nc.NATIONAL_CO_CODE][0]
+                    total[nco_index] = len(node_ref_number)
+
+            # Proportions might result in a bigger number of nodes, specially if "nodes" is low.
+            if sum(total) > nodes:
+                decimal_part = (nodes * types.proportion / total_proportion) % 1
+                nco_index = types.index[types['code'] == nc.NATIONAL_CO_CODE][0]
+                reduce_index = decimal_part[(decimal_part > 0.5) & (decimal_part.index != nco_index)].idxmin()
+                total[reduce_index] -= 1
             types["number"] = total.astype(int)
 
             # Types defined by the user might not include national nodes
@@ -382,13 +418,6 @@ class MetroGenApp:
             degrees = [int(key) for key, value in key_values]
             weights = [int(value) for key, value in key_values]
 
-            # Try to recover the number of nodes or use 50 as default
-            nodes = 50
-            try:
-                nodes = int(node_number.get())
-            except ValueError:
-                print("Error in number of nodes, using default: ", nodes)
-
             add_prefix = ""
             if selected_cluster != "-":
                 add_prefix = "_" + selected_cluster + "_"
@@ -400,54 +429,43 @@ class MetroGenApp:
             self.best_fit_topology_n(degrees, weights, types, node_ref_number, add_prefix, extra_node_info,
                                      algorithms)
             self.national_ref_nodes = ["" for i in self.topo.nodes]
-        # Get x and y coordinates for all the elements
-        x_pos = [pos[0] for pos in list(self.pos.values())]
-        y_pos = [pos[1] for pos in list(self.pos.values())]
-        # Calculate the horizontal and vertical size of the image
-        x_size = max(x_pos) - min(x_pos)
-        y_size = max(y_pos) - min(y_pos)
 
-        if x_size > y_size:
-            y_size = y_size * 12 / x_size
-            x_size = 12
-        else:
-            x_size = x_size * 12 / y_size
-            y_size = 12
+        self.update_image_frame()
+        # Get x and y coordinates for all the elements
+        # x_pos = [pos[0] for pos in list(self.pos.values())]
+        # y_pos = [pos[1] for pos in list(self.pos.values())]
+        # Calculate the horizontal and vertical size of the image
+        # x_size = max(x_pos) - min(x_pos)
+        # y_size = max(y_pos) - min(y_pos)
+
+        # if x_size > y_size:
+        #    y_size = y_size * 12 / x_size
+        #    x_size = 12
+        #else:
+        #    x_size = x_size * 12 / y_size
+        #    y_size = 12
 
         # size_ratio = x_size / self.fig_width
         # Change the figure width based on this and prepare the canvas and widgets
-        self.fig_width = x_size
-        self.figure = plt.Figure(figsize=(x_size, y_size),
-                                 tight_layout=True, dpi=50)
-        ax = self.figure.add_subplot(111)
-        canvas = FigureCanvasTkAgg(self.figure, master=frame)
-        canvas_widget = canvas.get_tk_widget()
+        # self.fig_width = x_size
+        # self.figure = plt.Figure(figsize=(x_size, y_size),
+        #                         tight_layout=True, dpi=50)
+        # ax = self.figure.add_subplot(111)
+        # canvas = FigureCanvasTkAgg(self.figure, master=frame)
+        # canvas_widget = canvas.get_tk_widget()
 
         # canvas_widget.config(width=x_size, height=y_size)
         # Add the Tkinter canvas to the window
         # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
-        canvas_widget.grid(row=0, column=0, rowspan=3, sticky=tk.W + tk.N)
+        # canvas_widget.grid(row=0, column=0, rowspan=3, sticky=tk.W + tk.N)
 
         # Draw the figure
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
         # Retrieve the reference to the label where distance ranges and proportions are drawn
-        output_label = frame.nametowidget("print_distances")
-        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
-        output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
-
-    # find and remove the group_tab figure canvas
-    def remove_old_group_figure_canvas(self):
-        # Get the frame of the group tab
-        frame = self.root.nametowidget("notebook_gen.group_tab")
-        old_canvas = None
-        # Traverse the children until we find one of type tk.Canvas
-        for i in frame.winfo_children():
-            if isinstance(i, tk.Canvas):
-                old_canvas = i
-                break
-        # Destroy the canvas
-        old_canvas.destroy()
+        # output_label = frame.nametowidget("print_distances")
+        # req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        # output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
 
     def enable_nodes(self):
         # frame = self.root.nametowidget("notebook_gen.source_frame")
@@ -525,15 +543,18 @@ class MetroGenApp:
                 req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
                 # Optimization by minimizing the optional function
                 np_pos = np.array(list(pos.values()))
+                bound = [(a - self.bounds, a + self.bounds) for a in np_pos.flatten()]
                 opt_min = minimize(opt_function, np_pos.flatten(),
                                    args=(topo, self.upper_limits, self.req_distance_props),
-                                   method='L-BFGS-B', options={'eps': 1})
+                                   method='L-BFGS-B', options={'eps': 1}, bounds=bound)
                 print("Iteration ", i, " for algorithm ", algorithm)
                 new_pos = {node: position for node, position in
                            zip(list(topo.nodes), opt_min.x.reshape((len(topo.nodes), 2)))}
                 opt_distances = calculate_edge_distances(topo, new_pos,
                                                          max(self.upper_limits))
-                distances = optimize_distance_ranges(self.upper_limits, req_weights, distances)
+                pos = new_pos
+                # distances = optimize_distance_ranges(self.upper_limits, req_weights, distances)
+                distances = optimize_distance_ranges(self.upper_limits, req_weights, opt_distances)
                 # Calculate error metrics to try to select the best topology
                 new_distance_weight = [dist / 100 for dist in count_distance_ranges(distances, self.upper_limits)]
                 mae, mape_distance, rsme_distance, actual_dist = check_metrics(self.upper_limits, req_weights,
@@ -550,13 +571,16 @@ class MetroGenApp:
         if self.setter is None:
             # self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.max_upper)
             self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.req_distance_props,
-                                               max(self.distances), self.iterations_distance)
+                                               max(self.distances), self.iterations_distance, self.bounds)
         else:
-            self.setter.show(self.upper_limits, self.req_distance_props, max(self.distances), self.iterations_distance)
+            self.setter.show(self.upper_limits, self.req_distance_props, max(self.distances), self.iterations_distance,
+                             self.bounds)
 
-    def set_upper_limits(self, upper_limits, req_proportions, max_distance, iterations=None):
+    def set_upper_limits(self, upper_limits, req_proportions, max_distance, iterations=None, bounds=None):
         if iterations is not None:
             self.iterations_distance = iterations
+        if bounds is not None:
+            self.bounds = bounds
         # variable for the upper limits of the distances.
         self.upper_limits = upper_limits
         # Requested proportions for distances
@@ -574,3 +598,76 @@ class MetroGenApp:
         # mean error
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)
+
+    # Load a topology from file
+    def load_topology(self):
+        # Ask for the filepath to the file to read
+        file_path = filedialog.askopenfilename(title="Open Topology", defaultextension=".xlsx",
+                                               filetypes=[("Excel files", ".xlsx .xls")])
+
+        # If it does not exist then show an error
+        if not file_path:
+            tk.messagebox.showerror('', texts.ERROR_READING)
+            return
+
+        # Read the BB information from the file
+        res, topo, distances, assigned_types, pos, clusters = read_network_xls(file_path, ntype=nc.METRO_CORE)
+
+        # If the result if False, then show an error
+        if not res:
+            tk.messagebox.showerror('', texts.ERROR_READING)
+        else:
+            # Otherwise assign the parameters
+            self.topo, self.distances, self.assigned_types, self.clusters, self.pos = \
+                topo, distances, assigned_types, clusters, pos
+            # Generate the colors
+            self.colors = color_nodes(assigned_types, self.color_codes)
+            # And update the images without reclustering
+            self.update_image_frame()
+        return
+
+    def update_image_frame(self):
+        old_canvas = None
+
+        frame = self.root.nametowidget("notebook_gen.image_frame")
+        # Find the old canvas for the image and destroy it
+        for i in frame.winfo_children():
+            if isinstance(i, tk.Canvas):
+                old_canvas = i
+                break
+        old_canvas.destroy()
+
+        # Get x and y coordinates for all the elements
+        x_pos = [pos[0] for pos in list(self.pos.values())]
+        y_pos = [pos[1] for pos in list(self.pos.values())]
+        # Calculate the horizontal and vertical size of the image
+        x_size = max(x_pos) - min(x_pos)
+        y_size = max(y_pos) - min(y_pos)
+
+        # y_size will be kept always as 10 while x_size is resized to keep proportions
+        if x_size > y_size:
+            y_size = y_size * 12 / x_size
+            x_size = 12
+        else:
+            x_size = x_size * 12 / y_size
+            y_size = 12
+
+        # size_ratio = x_size / self.fig_width
+        # Change the figure width based on this and prepare the canvas and widgets
+        self.fig_width = x_size
+        self.figure = plt.Figure(figsize=(x_size, y_size),
+                                 tight_layout=True, dpi=50)
+        ax = self.figure.add_subplot(111)
+        canvas = FigureCanvasTkAgg(self.figure, master=frame)
+        canvas_widget = canvas.get_tk_widget()
+
+        # canvas_widget.config(width=x_size, height=y_size)
+        # Add the Tkinter canvas to the window
+        canvas_widget.grid(row=0, column=0, rowspan=7, sticky=tk.W + tk.N)
+        # Draw the figure
+        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+                node_color=self.colors, ax=ax)
+        # Retrieve the reference to the label where distance ranges and proportions are drawn
+        output_label = frame.nametowidget("print_distances")
+        req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
+        output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)

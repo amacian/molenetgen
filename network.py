@@ -62,7 +62,7 @@ def count_degree_freqs(degree_values):
 def calculate_edge_distances(graph, positions, max_limit):
     distances = [distance.euclidean(positions[u], positions[v]) for u, v in graph.edges]
     factor = max_limit / max(distances)
-    actual_distances = [int(dist * factor) for dist in distances]
+    actual_distances = [int(dist * factor) for dist in distances] # TODO: Round to 2 dec
     return actual_distances
 
 
@@ -89,10 +89,10 @@ def rename_nodes_idx(assigned_types, indexes, special_rename_type=None, explicit
 def write_network_xls(file, graph, distances, types, node_sheet, link_sheet, macro_region=None, x_coord=None,
                       y_coord=None, reference_nodes=None, coord_type=nc.BACKBONE, households=None, macro_cells=None,
                       small_cells=None, regional_twins=None, national_twins=None, link_capacities=None):
-    x_coord_back = [0.00] * len(graph.nodes)
-    y_coord_back = [0.00] * len(graph.nodes)
-    x_coord_m_core = [0.00] * len(graph.nodes)
-    y_coord_m_core = [0.00] * len(graph.nodes)
+    x_coord_back = [0] * len(graph.nodes)
+    y_coord_back = [0] * len(graph.nodes)
+    x_coord_m_core = [0] * len(graph.nodes)
+    y_coord_m_core = [0] * len(graph.nodes)
 
     regional_ref_nodes = [val for val in graph.nodes]
 
@@ -825,6 +825,13 @@ def read_network_xls(file, ntype=nc.BACKBONE):
     clusters = []
     coord = []
 
+    # Depending on the type of topology read different coordinates
+    if ntype == nc.BACKBONE:
+        nodes_df = nodes_df[(nodes_df[nc.XLS_X_BACK] != 0) & (nodes_df[nc.XLS_Y_BACK] != 0)]
+    elif ntype == nc.METRO_CORE:
+        nodes_df = nodes_df[(nodes_df[nc.XLS_X_MCORE] != 0) & (nodes_df[nc.XLS_X_MCORE] != 0)]
+    links_df = links_df[links_df[nc.XLS_SOURCE_ID].isin(list(nodes_df[nc.XLS_NODE_NAME]))]
+    links_df = links_df[links_df[nc.XLS_DEST_ID].isin(list(nodes_df[nc.XLS_NODE_NAME]))]
     # Get the ids of the nodes
     names = nodes_df[nc.XLS_NODE_NAME]
     # Add all the nodes to the topology

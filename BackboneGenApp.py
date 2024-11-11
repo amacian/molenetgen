@@ -34,7 +34,7 @@ class BackboneGenApp:
     # dict_colors - dictionary that maps types to colors for the basic graph
     # iterations_distance - number of topologies to generate to get the best fit for the distances
     def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types,
-                 dict_colors={}, iterations_distance=nc.ITERATIONS_FOR_DISTANCE):
+                 dict_colors={}, iterations_distance=nc.ITERATIONS_FOR_DISTANCE, bounds=0.05):
         # Store the distance ranges, the requested proportions and the max distance value
         self.upper_limits = upper_limits
         self.req_distance_props = distance_range_props
@@ -42,6 +42,9 @@ class BackboneGenApp:
         # Number of topologies to generate in order to get the one with a distance distribution
         # nearest to the requested one
         self.iterations_distance = iterations_distance
+        # Bounds regarding movement of the nodes for optimization of link distances to
+        # avoid transforming the graph too much.
+        self.bounds = bounds
 
         self.distances = None
         # Backbone generator object
@@ -393,9 +396,9 @@ class BackboneGenApp:
         if self.setter is None:
             # self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.max_upper)
             self.setter = DistanceSetterWindow(self, self.root, self.upper_limits, self.req_distance_props,
-                                               self.max_upper, self.iterations_distance)
+                                               self.max_upper, self.iterations_distance, self.bounds)
         else:
-            self.setter.show(self.upper_limits, self.req_distance_props, self.max_upper, self.iterations_distance)
+            self.setter.show(self.upper_limits, self.req_distance_props, self.max_upper, self.iterations_distance, self.bounds)
 
     # Method to repaint the image frame with the new image
     # recluster (run the reclustering algorithm or just recreate the image with the existing values)
@@ -515,9 +518,11 @@ class BackboneGenApp:
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)
 
-    def set_upper_limits(self, upper_limits, req_proportions, max_distance, iterations=None):
+    def set_upper_limits(self, upper_limits, req_proportions, max_distance, iterations=None, bounds=None):
         if iterations is not None:
             self.iterations_distance = iterations
+        if bounds is not None:
+            self.bounds = bounds
         # variable for the upper limits of the distances.
         self.upper_limits = upper_limits
         # Requested proportions for distances
@@ -560,16 +565,21 @@ class BackboneGenApp:
                     # mean error
                     req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
                     np_pos = np.array(list(aux_pos.values()))
+                    print("Iteration ", i, " for algorithm ", algorithm, " in generator ", generator)
+                    bound = [(a - self.bounds, a + self.bounds) for a in np_pos.flatten()]
                     opt_min = minimize(opt_function, np_pos.flatten(),
                                        args=(aux_topo, self.upper_limits, self.req_distance_props),
-                                       method='L-BFGS-B', options={'eps':1})
-                    print("Iteration ", i, " for algorithm ", algorithm, " in generator ", generator)
-                    new_pos = {node:position for node, position in zip(list(aux_topo.nodes), opt_min.x.reshape((len(aux_topo.nodes), 2)))}
+                                       method='L-BFGS-B', options={'eps': 1}, bounds=bound)
+
+                    new_pos = {node: position for node, position in
+                               zip(list(aux_topo.nodes), opt_min.x.reshape((len(aux_topo.nodes), 2)))}
                     opt_distances = calculate_edge_distances(aux_topo, new_pos,
                                                              self.max_upper)
                     # print(opt_min.x.reshape((len(aux_topo.nodes), 2)))
                     # aux_distances = opt_min.x.reshape((len(aux_topo.nodes), 2))
                     aux_distances = optimize_distance_ranges(self.upper_limits, req_weights, opt_distances)
+                    aux_pos = new_pos
+                    # aux_distances = optimize_distance_ranges(self.upper_limits, req_weights, aux_distances)
                     # Calculate error metrics to try to select the best topology
                     new_distance_weight = [dist / 100 for dist in
                                            count_distance_ranges(aux_distances, self.upper_limits)]
