@@ -19,7 +19,19 @@ from itertools import combinations, product
 # Generate topology with the specific degrees and weights and the specified number of nodes
 def gen_topology(degrees, weights, nodes):
     # Generate k random values with the weight frequencies of degrees
-    sequence = random.choices(degrees, weights=weights, k=nodes)
+    # sequence = random.choices(degrees, weights=weights, k=nodes)
+    float_per_degree = [weight * nodes / sum(weights) for weight in weights]
+    nodes_per_degree = [int(round(float_degree)) for float_degree in float_per_degree]
+    if sum(nodes_per_degree) < nodes: #TODO turn if into while
+        decimal_part = [f % 1 for f in float_per_degree if f % 1 < 0.5]
+        inc_index = decimal_part.index(max(decimal_part))
+        nodes_per_degree[inc_index] += 1
+    elif sum(nodes_per_degree) > nodes: #TODO turn if into while
+        decimal_part = [f % 1 for f in float_per_degree if f % 1 > 0.5]
+        red_index = decimal_part.index(min(decimal_part))
+        nodes_per_degree[red_index] -= 1
+    sequence = [degree for degree, val in zip(degrees, nodes_per_degree) for _ in range(val)]
+    random.shuffle(sequence)
     # The sum of values must be even. If not, increase one of the smallest degree instances
     # print("Sum sequence: ", sum(sequence))
     if (sum(sequence) % 2) != 0:

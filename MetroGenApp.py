@@ -95,6 +95,11 @@ class MetroGenApp:
             nco_index = types.index[types['code'] == nc.NATIONAL_CO_CODE][0]
             reduce_index = decimal_part[(decimal_part > 0.5) & (decimal_part.index != nco_index)].idxmin()
             total[reduce_index] -= 1
+        elif sum(total) < nodes:
+            decimal_part = (nodes * types.proportion / total_proportion) % 1
+            nco_index = types.index[types['code'] == nc.NATIONAL_CO_CODE][0]
+            reduce_index = decimal_part[(decimal_part < 0.5) & (decimal_part.index != nco_index)].idxmax()
+            total[reduce_index] += 1
         types["number"] = total.astype(int)
 
         '''self.topo, self.distances, self.assigned_types, self.pos, self.colors = \
@@ -398,6 +403,11 @@ class MetroGenApp:
                 nco_index = types.index[types['code'] == nc.NATIONAL_CO_CODE][0]
                 reduce_index = decimal_part[(decimal_part > 0.5) & (decimal_part.index != nco_index)].idxmin()
                 total[reduce_index] -= 1
+            elif sum(total) < nodes:
+                decimal_part = (nodes * types.proportion / total_proportion) % 1
+                nco_index = types.index[types['code'] == nc.NATIONAL_CO_CODE][0]
+                reduce_index = decimal_part[(decimal_part < 0.5) & (decimal_part.index != nco_index)].idxmax()
+                total[reduce_index] += 1
             types["number"] = total.astype(int)
 
             # Types defined by the user might not include national nodes
