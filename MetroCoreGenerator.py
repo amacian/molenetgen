@@ -145,7 +145,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
         return topo, assigned_types
 
     # Connect nodes to other existing ones of a different topology. Increase degrees.
-    def connect_sub_metro_regions(self, topology, sub_topology, min_degree):
+    def connect_sub_metro_regions_alt(self, topology, sub_topology, min_degree):
         indexes = []
         low_degree = min_degree
         while True:
@@ -154,6 +154,10 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
             if len(indexes) > 1:
                 break
             low_degree += 1
+        # [index for index, element in topology.edges if element = ()
+        # [x for (x, y) in list(topology.edges) if x = (list(topology.nodes)[topo_cons[0]])]
+        # [x for (x, y) in list(topology.edges) if x == (list(topology.nodes)[topo_cons[0]])]
+        #[index for index, (x, y) in enumerate(list(topology.edges)) if x == (list(topology.nodes)[topo_cons[0]])]
         topo_cons = random.sample(indexes, k=2)
         relabelled = [val + len(topology.nodes) for val in sub_topology.nodes]
 
@@ -168,6 +172,20 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
         subtopo_cons = random.sample(indexes, k=2)
 
         sub_topology = nx.relabel_nodes(sub_topology, dict(zip(sub_topology.nodes, relabelled)))
+        topology = nx.union(topology, sub_topology)
+        topology.add_edge(topo_cons[0], subtopo_cons[0])
+        topology.add_edge(topo_cons[1], subtopo_cons[1])
+        return topology
+
+    def connect_sub_metro_regions(self, topology, sub_topology, min_degree):
+
+        topo_cons = random.sample(list(topology.edges), k=1)[0]
+        topology.remove_edge(topo_cons[0], topo_cons[1])
+
+        relabelled = [val + len(topology.nodes) for val in sub_topology.nodes]
+        sub_topology = nx.relabel_nodes(sub_topology, dict(zip(sub_topology.nodes, relabelled)))
+        subtopo_cons = random.sample(list(sub_topology.edges), k=1)[0]
+        sub_topology.remove_edge(subtopo_cons[0], subtopo_cons[1])
         topology = nx.union(topology, sub_topology)
         topology.add_edge(topo_cons[0], subtopo_cons[0])
         topology.add_edge(topo_cons[1], subtopo_cons[1])
