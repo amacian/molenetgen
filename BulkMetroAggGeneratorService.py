@@ -26,14 +26,24 @@ class DefaultBulkMetroAggGenService(BulkMetroAggGeneratorService):
         self.generator = metro_agg_gen
 
     def bulk_metro_aggregation(self, nodes, links_list, lengths, l_perc, hops, h_perc,
-                               linked_only, n_horseshoes, d_colors, file_path,
+                               linked_only, n_horseshoes, d_colors, file_path, limit_lengths_link,
                                prefix=nc.LOCAL_CO_CODE):
 
         # Select the number of hops for all the horseshoes to be generated
         horseshoe_hops = random.choices(hops, weights=h_perc, k=n_horseshoes)
         # Select, randomly, the initial end index of the horseshoes
         names = list(nodes[nc.XLS_NODE_NAME])
-        initial_end_index = random.choices(range(len(names)), k=n_horseshoes)
+
+        initial_end_index = []
+        assigned = 0
+        # Validate that each end has at least one horseshoe if n_horseshoes>len(names)
+        if n_horseshoes > len(names):
+            initial_end_index = [i for i in range(len(names))]
+            assigned = len(names)
+
+        initial_end_index.extend(random.choices(range(len(names)), k=(n_horseshoes - assigned)))
+        #initial_end_index = random.choices(range(len(names)), k=n_horseshoes)
+
         # Get tuples for the coordinates of the nodes
         x = list(nodes[nc.XLS_X_MCORE])
         y = list(nodes[nc.XLS_Y_MCORE])
@@ -84,7 +94,8 @@ class DefaultBulkMetroAggGenService(BulkMetroAggGeneratorService):
             (topo, distances, assigned_types, pos, colors,
              national_ref_nodes) = self.generator.metro_aggregation_horseshoe(end1, 1, end2,
                                                                               horseshoe_hops[i], lengths, l_perc,
-                                                                              h_prefix, d_colors)
+                                                                              h_prefix, d_colors,
+                                                                              limit_lengths_link)
             # Prepare the figure. At this moment we are only keeping the last one
             # But we may change the code to keep all of them in the future by modifying the file name
             figure = plt.Figure(tight_layout=True, dpi=50)

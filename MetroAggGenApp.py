@@ -20,7 +20,8 @@ class MetroAggGenApp:
     # length_ranges - ranges of lengths for each hop in the aggregation ring
     # length_percentages - % of hops in the horseshoe within the related range
     # dict_colors - dictionary that maps types to colors for the basic graph
-    def __init__(self, length_ranges, length_percentages, hop_number, hop_percents, dict_colors={}):
+    def __init__(self, length_ranges, length_percentages, hop_number, hop_percents, dict_colors={},
+                 limits_link_length=[0, 1000]):
         self.topo = None
         self.metro_agg_gen = DefaultMetroAggGenerator()
         self.lengths = length_ranges
@@ -32,6 +33,7 @@ class MetroAggGenApp:
         self.national_ref_nodes = None
         self.nodes_list = ["-"]
         self.links_list = None
+        self.limits_link_length = limits_link_length
         # Variable to hold the default figure
         self.figure = None
         # Root component
@@ -404,10 +406,10 @@ class MetroAggGenApp:
 
         # Generate the horseshoes
         (result, message) = bulk_gen.bulk_metro_aggregation(reduced_list, reduced_links, self.lengths,
-                                        self.l_perc, self.hops, self.h_perc,
-                                        self.linked_only.get(), n_horse, self.color_codes,
-                                        file_path, nc.LOCAL_CO_CODE)
+                                                            self.l_perc, self.hops, self.h_perc,
+                                                            self.linked_only.get(), n_horse, self.color_codes,
+                                                            file_path, limit_lengths_link=self.limits_link_length,
+                                                            prefix=nc.LOCAL_CO_CODE)
 
         if not result:
             tk.messagebox.showerror('', message)
-

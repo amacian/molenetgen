@@ -414,6 +414,9 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
         while True:
             # Call the function to generate the topology
             topo = gen_topology(degrees, weights, nodes_no_nco)
+
+            if topo is None:
+                print("Error")
             # Check for node survivability
             if not nx.is_connected(topo) or len(nx.minimum_node_cut(topo)) < 2:
                 continue
@@ -432,7 +435,7 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
                 break
             # Otherwise, repeat the node generation
 
-        # Types and related proportions (escluding NCOs)
+        # Types and related proportions (excluding NCOs)
         types_no_nco = [code for code in types.code if code != nc.NATIONAL_CO_CODE]
         props_no_nco = [prop for code, prop in zip(types.code, types.proportion) if code != nc.NATIONAL_CO_CODE]
         # Assign types to nodes
@@ -522,7 +525,8 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
 
             # Connect to other nodes
             # Select the connectivity degree
-            connectivity = random.choices(degrees, weights=weights, k=1)[0]
+            # connectivity = random.choices(degrees, weights=weights, k=1)[0]
+            connectivity = 2
             # Find as many nodes as required that are the nearest to this node
             distance, indexes = tree.query((x_node, y_node), k=connectivity)
             # Retrieve the name of each of those nodes and add an edge between them

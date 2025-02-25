@@ -11,7 +11,8 @@ class MetroAggGenerator(ABC):
     def metro_aggregation_horseshoe(self, initial_rco_name,
                                     initial_lco_idx, final_rco_name,
                                     hops, length_ranges,
-                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={}):
+                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={},
+                                    limit_lengths_link=None):
         pass
 
 
@@ -21,7 +22,8 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
     def metro_aggregation_horseshoe(self, initial_rco_name,
                                     initial_lco_idx, final_rco_name,
                                     hops, length_ranges,
-                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={}):
+                                    perc_horse_length, prefix=nc.LOCAL_CO_CODE, dict_colors={},
+                                    limit_lengths_link=None):
         default_type = nc.LOCAL_CO_CODE
         # The number of local offices is 1 element less than number of hops
         n_local_offices = hops - 1
@@ -30,11 +32,37 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
                                        weights=perc_horse_length, k=1)[0]
         # Select a length from the range using a uniform distribution
         total_length = int(random.uniform(length_ranges[range_idx - 1] + 1, length_ranges[range_idx]))
-        # Select as many cut points as local COs to define the place in the line where they
-        # will be located
-        cut_points = [element / 100 for element in random.sample(range(1, (total_length * 100)), hops - 1)]
-        # Sort in ascending order
-        cut_points.sort()
+
+        # Validate that the total_length / number of hops is not higher than 70% of the maximum hop length.
+        if limit_lengths_link is not None:
+            while total_length/hops > (0.7 * limit_lengths_link[1]):
+                range_idx = 1 + random.choices(range(len(length_ranges) - 1),
+                                               weights=perc_horse_length, k=1)[0]
+                total_length = int(random.uniform(length_ranges[range_idx - 1] + 1, length_ranges[range_idx]))
+
+        positions = []
+        distances = []
+
+        while True:
+            # Select as many cut points as local COs to define the place in the line where they
+            # will be located
+            cut_points = [element / 100 for element in random.sample(range(1, (total_length * 100)), hops - 1)]
+            # Sort in ascending order
+            cut_points.sort()
+
+            # Define the positions. First node is located at 0, 0
+            positions = [0]
+            # Local COs are located at the cut points
+            positions.extend(cut_points)
+            # Final RCO is located at total_length
+            positions.append(total_length)
+            # Calculate distances based on positions
+            distances = [round(positions[i + 1] - positions[i], 2) for i in range(len(positions) - 1)]
+            if not any(distance > limit_lengths_link[1] or distance < limit_lengths_link[0]
+                       for distance in distances):
+                break
+            distances = []
+
         # Create a graph
         horseshoe = nx.Graph()
         # Add the initial RCO and its type in the list of node types
@@ -64,15 +92,6 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
         # Define the colors based on the node types
         colors = color_nodes(types, dict_colors)
 
-        # Define the positions. First node is located at 0, 0
-        positions = [0]
-        # Local COs are located at the cut points
-        positions.extend(cut_points)
-        # Final RCO is located at total_length
-        positions.append(total_length)
-        # Calculate distances based on positions
-        distances = [round(positions[i + 1] - positions[i], 2) for i in range(len(positions) - 1)]
-        # print(distances)
 
         # Draw the nodes in the defined positions
         nx.draw(horseshoe, node_color=colors, with_labels=True, font_weight='bold',

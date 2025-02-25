@@ -11,11 +11,13 @@ if __name__ == '__main__':
         nc.REGIONAL_NONHUB_CO_CODE: 'y',
         nc.LOCAL_CO_CODE: 'b'
     }
-    length_ranges = [0, 50, 100, 200, 302]
+    length_ranges = [15, 50, 100, 200, 302]
     length_percentages = [25, 40, 29, 6]
+
+    limits_link_length = [0.6, 166.4]
 
     hop_ranges = [2, 3, 4, 5, 6, 7, 8]
     hop_percentages = [10, 19, 21, 27, 14, 5, 4]
 
     app = MetroAggGenApp(length_ranges, length_percentages, hop_number=hop_ranges, hop_percents=hop_percentages,
-                         dict_colors=dict_colors)
+                         dict_colors=dict_colors, limits_link_length=limits_link_length)
