@@ -9,7 +9,8 @@ from scipy.optimize import minimize
 
 import Texts_EN
 import networkconstants as nc
-from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator, DistanceConnectedBasedClusterGenerator
+from ClusterGenerator import ClusterGenerator, DistanceBasedClusterGenerator, DistanceConnectedBasedClusterGenerator, \
+    BisectingKMeans_Cluster_Generator
 from BackboneGenerator import BackboneGenerator, DefaultBackboneGenerator, DualBackboneGenerator, WaxmanPavenGenerator
 from DistanceSetterWindow import DistanceSetterWindow
 from KeyValueList import KeyValueList
@@ -259,6 +260,12 @@ class BackboneGenApp:
                           orient=tk.HORIZONTAL, resolution=0.001)
         slider.set(0.03)
         slider.grid(row=0, column=1)
+        label_Clus = tk.Label(frame, text="K-means clusters")
+        label_Clus.grid(row=0, column=2)
+        sliderClus = tk.Scale(frame, name="n_clus", from_=1, to=20,
+                          orient=tk.HORIZONTAL, resolution=1)
+        sliderClus.set(2)
+        sliderClus.grid(row=0, column=3)
         label_single = tk.Label(frame, text="Avoid single nodes")
         label_single.grid(row=1, column=0)
         check = ttk.Checkbutton(frame, name="avoid_single", variable=self.remove_single_clusters)
@@ -266,11 +273,11 @@ class BackboneGenApp:
         label_algo = tk.Label(frame, text="Select clustering strategy")
         label_algo.grid(row=2, column=0)
         combo = ttk.Combobox(frame, name="algo_cluster",
-                             values=["By distance only", "By distance and Connected"])
+                             values=["By distance only", "By distance and Connected", "Bisecting K-means"])
         combo.current(0)
         combo.grid(row=2, column=1, pady=5)
         group_button = tk.Button(frame, text="Search for groups", command=self.group_graph)
-        group_button.grid(row=2, column=2, pady=5)
+        group_button.grid(row=2, column=2, columnspan=2,  pady=5)
         label_groups = tk.Label(frame,
                                 text="",
                                 name="print_groups", anchor="w")
@@ -336,16 +343,21 @@ class BackboneGenApp:
     def group_graph(self):
         # Find the combo that defines the eps
         slider = self.root.nametowidget("notebook_gen.group_tab.max_group")
+        sliderClus = self.root.nametowidget("notebook_gen.group_tab.n_clus")
         # Find the combo that defines the Clustering method
         cluster_alg = self.root.nametowidget("notebook_gen.group_tab.algo_cluster")
+        aux = float(slider.get())
         match cluster_alg.get():
             case "By distance only":
                 self.cluster_gen = DistanceBasedClusterGenerator()
+            case "Bisecting K-means":
+                self.cluster_gen = BisectingKMeans_Cluster_Generator()
+                aux = int(sliderClus.get())
             case _:
                 self.cluster_gen = DistanceConnectedBasedClusterGenerator()
         # Call the function that generates the tab
         groups, self.clusters = self.cluster_gen.find_groups(self.topo, self.assigned_types, self.pos,
-                                                             eps=float(slider.get()),
+                                                             aux,
                                                              avoid_single=self.remove_single_clusters.get())
         self.redraw_group_graph()
 
@@ -370,7 +382,7 @@ class BackboneGenApp:
         # canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         # Define the color map that will be used to represent the clusters
         color_map = plt.cm.rainbow
-        norm = matplotlib.colors.Normalize(vmin=1, vmax=max(self.clusters))
+        norm = matplotlib.colors.Normalize(vmin=0, vmax=max(self.clusters))
         # Draw the result
         nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
                 node_color=color_map(norm(self.clusters)), ax=ax)

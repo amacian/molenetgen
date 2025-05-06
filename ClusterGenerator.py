@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN, BisectingKMeans
 import networkconstants as nc
 from scipy import spatial
 
@@ -278,4 +278,40 @@ class DistanceConnectedBasedClusterGenerator(ClusterGenerator):
                     position = node_list.index(elem)
                     cluster_labels[position] = new_label
 
+        return cluster_dict, cluster_labels
+
+
+class BisectingKMeans_Cluster_Generator(DistanceBasedClusterGenerator):
+    def find_groups(self, topo, types, pos, num_clusters=5, avoid_single=True):
+        # Create a list with all the nodes
+        nodes = [u for u in topo.nodes]
+        # Create a sublist with just the nodes of types included
+        nodes_pending = [element for element, type_e in zip(nodes, types) if type_e not in nc.TYPES_EXCLUDED]
+        # Define the coordinates as lists of x, y for each node
+        coord = [[pos[0], pos[1]] for pos, type_e in zip(list(pos.values()), types) if type_e not in nc.TYPES_EXCLUDED]
+        # Apply the DBSCAN clustering algorithm with Euclidean metric
+        db = BisectingKMeans(n_clusters = num_clusters).fit(coord)
+
+        # Retrieve the assigned labels
+        cluster_labels = db.labels_
+
+        # Convert nodes_pending into an np array for later handling
+        nodes_pending = np.array(nodes_pending)
+
+        # Create a dictionary with key=cluster index and values the set of nodes of the cluster
+        cluster_dict = {i: nodes_pending[(cluster_labels == i)] for i in range(num_clusters)}
+
+        # Retrieve the indexes of the node list that are of an excluded type
+        excluded_indices = [index for index, value in list(enumerate(types)) if value in nc.TYPES_EXCLUDED]
+        # convert the cluster labels into a list to insert additional clusters
+        cluster_labels = list(cluster_labels)
+
+        # Group all the excluded nodes into the same new cluster label (not really a cluster)
+        for i in excluded_indices:
+            cluster_labels.insert(i, num_clusters)
+        # If we want to avoid clusters with just 1 node
+        if avoid_single:
+            cluster_labels = self.merge_individual_clusters(nodes, pos, cluster_dict, cluster_labels, types,
+                                                            excluded_indices, topo)
+        # print([list(cluster_v) for cluster_v in cluster_dict.values()])
         return cluster_dict, cluster_labels
