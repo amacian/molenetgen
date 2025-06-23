@@ -9,7 +9,7 @@ This work has been developed under R&D projects:
 
 To cite this project use:
 A. Sánchez-Macián, N. Koneva, M. Quagliotti, J.M. Rivas-Moscoso, F. Arpanaei,
-J. A. Hernández, J.P. Fernández-Palacios, L. Zhang and E. Riccardi 
+J. A. Hernández, J.P. Fernández-Palacios 
 "Generating realistic optical topologies for techno-economic studies using MoleNetwork",
 Submitted to Journal of Optical Communications and Networking.
 
