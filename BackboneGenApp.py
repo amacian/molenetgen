@@ -250,6 +250,13 @@ class BackboneGenApp:
         combo_gen.current(0)
         label_gen.grid(row=(20 + initial_row), column=0, pady=5)
         combo_gen.grid(row=(20 + initial_row), column=1, pady=5)
+
+        label_type = tk.Label(frame, text="Assign type by:")
+        combo_type = ttk.Combobox(frame, name="type_sel", state="readonly",
+                                  values=[nc.ASSIGN_BY_RANDOM, nc.ASSIGN_BY_DEGREE, nc.ASSIGN_BY_BETWEEN])
+        combo_type.current(0)
+        label_type.grid(row=(21 + initial_row), column=0, pady=5)
+        combo_type.grid(row=(21 + initial_row), column=1, pady=5)
         return frame, degree_list, type_list
 
     def create_tab_grouping(self, parent, frame_name):
@@ -330,9 +337,10 @@ class BackboneGenApp:
         except ValueError:
             print("Error in number of nodes, using default: ", nodes)
 
+        type_sel = self.root.nametowidget("notebook_gen.params.type_sel").get()
         # Call the backbone function with the expected parameters
         self.best_fit_topology_n(degrees, weights, nodes, types, self.color_codes,
-                                 algorithm_sel, generators)
+                                 algorithm_sel, generators, type_sel=type_sel)
 
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)
@@ -549,7 +557,7 @@ class BackboneGenApp:
         output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
 
     def best_fit_topology_n(self, degrees, weights, nodes, types, dict_colors,
-                            algorithms, generators=None):
+                            algorithms, generators=None, type_sel=nc.ASSIGN_BY_RANDOM):
         algorithm = algorithms[0]
         if generators is None:
             generators = [self.back_gen]
@@ -567,11 +575,9 @@ class BackboneGenApp:
                     # the position of the nodes and the assigned colors
                     aux_topo, aux_distances, aux_assigned_types, \
                         aux_node_sheet, aux_link_sheet, \
-                        aux_pos, aux_colors = generator.generate(degrees, weights, nodes,
-                                                                 self.upper_limits, types,
-                                                                 algo=algorithm,
-                                                                 dict_colors=dict_colors,
-                                                                 max_distance=self.max_upper)
+                        aux_pos, aux_colors = generator.generate(degrees, weights, nodes, self.upper_limits, types,
+                                                                 algo=algorithm, dict_colors=dict_colors,
+                                                                 max_distance=self.max_upper, type_assign=type_sel)
 
                     # Calculate weights from requested proportions and regenerate distances optimizing the
                     # mean error

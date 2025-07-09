@@ -4,7 +4,8 @@ from scipy import spatial
 import networkconstants as nc
 import random
 import networkx as nx
-from network import gen_topology, calculate_edge_distances, rename_nodes, color_nodes
+from network import gen_topology, calculate_edge_distances, rename_nodes, color_nodes, assign_betweenness_types, \
+    assign_degree_num_types
 import pandas as pd
 
 
@@ -18,8 +19,8 @@ class MetroCoreGenerator(ABC):
     # national_nodes: list of national nodes if defined
     # add_prefix: additional prefix to incorporate to each non-national node
     @abstractmethod
-    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
-                      national_nodes=[], add_prefix="", extra_node_info=None):
+    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral", national_nodes=[],
+                      add_prefix="", extra_node_info=None, type_sel=nc.ASSIGN_BY_RANDOM):
         pass
 
     # Function to define the parameters for the ring Metro-regional networks
@@ -44,8 +45,8 @@ class MetroCoreGenerator(ABC):
 
 class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
-    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
-                      national_nodes=[], add_prefix="", extra_node_info=None):
+    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral", national_nodes=[],
+                      add_prefix="", extra_node_info=None, type_sel=nc.ASSIGN_BY_RANDOM):
 
         # Split the generation into subnets so the connections are balanced for each region
         # With a NCO
@@ -70,7 +71,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
 
             # Generate one of the sub topologies
             sub_topo, assigned_types_sub = self.sub_metro(degrees, weights,
-                                                          sum(subnet_numbers), types, subnet_numbers)
+                                                          sum(subnet_numbers), types, subnet_numbers, type_sel)
 
             # plt.rcParams["figure.figsize"] = [val for val in plt.rcParamsDefault["figure.figsize"]]
 
@@ -117,7 +118,7 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
         return topo, distances, assigned_types, pos, colors
 
     # Generate the subtopologies for the metro topology
-    def sub_metro(self, degrees, weights, nodes, types, subnet_number):
+    def sub_metro(self, degrees, weights, nodes, types, subnet_number, type_sel=nc.ASSIGN_BY_RANDOM):
         while True:
             # Call the function to generate the topology
             topo = gen_topology(degrees, weights, nodes)
@@ -139,7 +140,14 @@ class DefaultMetroCoreGenerator(MetroCoreGenerator):
             # print("Nodes with fewer links than lower edge threshold")
 
         # Assign types to nodes
-        assigned_types = MetroCoreGenerator.metro_assign_types(pd.DataFrame({'code': types.code,
+        assigned_types = None
+        match type_sel:
+            case nc.ASSIGN_BY_BETWEEN:
+                assigned_types = assign_betweenness_types(topo, types.code, subnet_number)
+            case nc.ASSIGN_BY_DEGREE:
+                assigned_types = assign_degree_num_types(topo, types.code, subnet_number)
+            case _:
+                assigned_types = MetroCoreGenerator.metro_assign_types(pd.DataFrame({'code': types.code,
                                                                              'number': subnet_number}))
 
         return topo, assigned_types
@@ -380,13 +388,13 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
         # In case of retrieving BB nodes, fit them in the inner X% of the new image
         self.scale_factor = scale_factor
 
-    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
-                      national_nodes=[], add_prefix="", extra_node_info=None):
+    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral", national_nodes=[],
+                      add_prefix="", extra_node_info=None, type_sel=nc.ASSIGN_BY_RANDOM):
 
         # No coordinates available, go to the default generator
         if extra_node_info is None or nc.XLS_X_BACK not in extra_node_info or nc.XLS_Y_BACK not in extra_node_info:
-            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors,
-                                         algo, national_nodes, add_prefix, extra_node_info)
+            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors, algo, national_nodes,
+                                         add_prefix, extra_node_info, type_sel=type_sel)
 
         # Increment in %distance in case that a BB node is to be inserted in an already used coordinate.
         increment = 0.01
@@ -401,8 +409,8 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
         # When we have just 1 national node, we can just call the basic algorithm.
         if len(national_nodes) != len(extra_node_info):
             print(national_nodes, extra_node_info, len(national_nodes))
-            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors,
-                                         algo, national_nodes, add_prefix, extra_node_info)
+            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors, algo, national_nodes,
+                                         add_prefix, extra_node_info, type_sel=type_sel)
 
         # Nodes excluding NCOs to generate the topology without the BB nodes
         nodes_no_nco = sum([num for num, code in zip(types.number, types.code) if code != nc.NATIONAL_CO_CODE])
@@ -439,7 +447,14 @@ class CoordinatesMetroCoreGenerator(DefaultMetroCoreGenerator):
         types_no_nco = [code for code in types.code if code != nc.NATIONAL_CO_CODE]
         props_no_nco = [prop for code, prop in zip(types.code, types.proportion) if code != nc.NATIONAL_CO_CODE]
         # Assign types to nodes
-        assigned_types = random.choices(types_no_nco, weights=props_no_nco, k=len(topo.nodes))
+        assigned_types = None
+        match type_sel:
+            case nc.ASSIGN_BY_BETWEEN:
+                assigned_types = assign_betweenness_types(topo, types_no_nco, props_no_nco)
+            case nc.ASSIGN_BY_DEGREE:
+                assigned_types = assign_degree_num_types(topo, types_no_nco, props_no_nco)
+            case _:
+                assigned_types = random.choices(types_no_nco, weights=props_no_nco, k=len(topo.nodes))
 
         # Modify the node labels to name them as a combination of the type, an index and the additional prefix
         name_nodes = rename_nodes(assigned_types, types, add_prefix=prefix)
@@ -552,10 +567,10 @@ class CoordinatesMetroCoreGenerator2(DefaultMetroCoreGenerator):
         # In case of retrieving BB nodes, fit them in the inner X% of the new image
         self.scale_factor = scale_factor
 
-    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral",
-                      national_nodes=[], add_prefix="", extra_node_info=None):
+    def generate_mesh(self, degrees, weights, upper_limits, types, dict_colors, algo="spectral", national_nodes=[],
+                      add_prefix="", extra_node_info=None, type_sel=nc.ASSIGN_BY_RANDOM):
 
         # No coordinates available, go to the default generator
         if extra_node_info is None or nc.XLS_X_BACK not in extra_node_info or nc.XLS_Y_BACK not in extra_node_info:
-            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors,
-                                         algo, national_nodes, add_prefix, extra_node_info)
+            return super().generate_mesh(degrees, weights, upper_limits, types, dict_colors, algo, national_nodes,
+                                         add_prefix, extra_node_info, type_sel=type_sel)

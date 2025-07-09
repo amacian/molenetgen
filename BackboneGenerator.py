@@ -4,7 +4,8 @@ import random
 import networkx as nx
 from pandas import DataFrame
 from numpy import average
-from network import gen_topology, calculate_edge_distances, rename_nodes, color_nodes, gen_waxman_paven_topology
+from network import (gen_topology, calculate_edge_distances, rename_nodes, color_nodes, gen_waxman_paven_topology,
+                     assign_betweenness_types, assign_degree_num_types)
 
 
 class BackboneGenerator(ABC):
@@ -16,15 +17,15 @@ class BackboneGenerator(ABC):
     # upper_limits: upper length limits for each range
     # types: available types of nodes and % per type
     @abstractmethod
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
-                 max_distance=None):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}, max_distance=None,
+                 type_assign=nc.ASSIGN_BY_RANDOM):
         pass
 
 
 class DefaultBackboneGenerator(BackboneGenerator):
 
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
-                 max_distance=None):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}, max_distance=None,
+                 type_assign=nc.ASSIGN_BY_RANDOM):
         # Sheet names in the Excel file for nodes and links
         node_sheet = nc.NODES_EXCEL_NAME
         link_sheet = nc.LINKS_EXCEL_NAME
@@ -51,9 +52,16 @@ class DefaultBackboneGenerator(BackboneGenerator):
             # Otherwise, repeat the node generation
 
         # Assign types to nodes
-        assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
+        assigned_types = None
+        match type_assign:
+            case nc.ASSIGN_BY_BETWEEN:
+                assigned_types = assign_betweenness_types(topo, types.code, types.proportion)
+            case nc.ASSIGN_BY_DEGREE:
+                assigned_types = assign_degree_num_types(topo, types.code, types.proportion)
+            case _:
+                assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
 
-        # Modify the node labels to name them as a combination of the type and an index
+       # Modify the node labels to name them as a combination of the type and an index
         name_nodes = rename_nodes(assigned_types, types)
         topo = nx.relabel_nodes(topo, dict(zip(topo.nodes, name_nodes)))
 
@@ -93,8 +101,8 @@ class DefaultBackboneGenerator(BackboneGenerator):
 
 
 class DualBackboneGenerator(BackboneGenerator):
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
-                 max_distance=None):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}, max_distance=None,
+                 type_assign=nc.ASSIGN_BY_RANDOM):
         # Sheet names in the Excel file for nodes and links
         node_sheet = nc.NODES_EXCEL_NAME
         link_sheet = nc.LINKS_EXCEL_NAME
@@ -121,7 +129,15 @@ class DualBackboneGenerator(BackboneGenerator):
             # Otherwise, repeat the node generation
 
         # Assign types to nodes
-        assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
+        assigned_types = None
+        match type_assign:
+            case nc.ASSIGN_BY_BETWEEN:
+                assigned_types = assign_betweenness_types(topo, types.code, types.proportion)
+            case nc.ASSIGN_BY_DEGREE:
+                assigned_types = assign_degree_num_types(topo, types.code, types.proportion)
+            case _:
+                assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
+
 
         # Modify the node labels to name them as a combination of the type and an index
         name_nodes = rename_nodes(assigned_types, types)
@@ -227,8 +243,8 @@ class WaxmanPavenGenerator(BackboneGenerator):
         self.alpha = alpha
         self.dist_factor = dist_factor
 
-    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={},
-                 max_distance=None):
+    def generate(self, degrees, weights, nodes, upper_limits, types, algo="spectral", dict_colors={}, max_distance=None,
+                 type_assign=0):
         # Sheet names in the Excel file for nodes and links
         node_sheet = nc.NODES_EXCEL_NAME
         link_sheet = nc.LINKS_EXCEL_NAME
@@ -274,7 +290,14 @@ class WaxmanPavenGenerator(BackboneGenerator):
             # Otherwise, repeat the node generation
 
         # Assign types to nodes
-        assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
+        assigned_types = None
+        match type_assign:
+            case nc.ASSIGN_BY_BETWEEN:
+                assigned_types = assign_betweenness_types(topo, types.code, types.proportion)
+            case nc.ASSIGN_BY_DEGREE:
+                assigned_types = assign_degree_num_types(topo, types.code, types.proportion)
+            case _:
+                assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
 
         # Modify the node labels to name them as a combination of the type and an index
         name_nodes = rename_nodes(assigned_types, types)

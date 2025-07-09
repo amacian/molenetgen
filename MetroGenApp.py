@@ -324,6 +324,14 @@ class MetroGenApp:
         label_algo.grid(row=(18 + initial_row), column=0, pady=5)
         combo.grid(row=(18 + initial_row), column=1, pady=5)
 
+        label_type = tk.Label(frame, text="Assign type by:")
+        combo_type = ttk.Combobox(frame, name="type_sel", state="readonly",
+                                  values=[nc.ASSIGN_BY_RANDOM, nc.ASSIGN_BY_DEGREE, nc.ASSIGN_BY_BETWEEN])
+        combo_type.current(0)
+        label_type.grid(row=(19 + initial_row), column=0, pady=5)
+        combo_type.grid(row=(19 + initial_row), column=1, pady=5)
+        return frame, degree_list, type_list
+
         return frame, degree_list, type_list
 
     # Create a new graph with the same parameters
@@ -436,8 +444,9 @@ class MetroGenApp:
                 self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
                                              algorithm, node_ref_number, add_prefix, extra_node_info)'''
             algorithms = nc.MAIN_ALGORITHMS if algorithm == nc.ALL_GEN else [algorithm]
-            self.best_fit_topology_n(degrees, weights, types, node_ref_number, add_prefix, extra_node_info,
-                                     algorithms)
+            type_sel = self.root.nametowidget("notebook_gen.params.type_sel").get()
+            self.best_fit_topology_n(degrees, weights, types, node_ref_number, add_prefix, extra_node_info, algorithms,
+                                     type_sel=type_sel)
             self.national_ref_nodes = ["" for i in self.topo.nodes]
 
         self.update_image_frame()
@@ -536,8 +545,8 @@ class MetroGenApp:
             combo_nodes["values"] = self.cluster_list
         return text
 
-    def best_fit_topology_n(self, degrees, weights, types, node_ref_number, add_prefix, extra_node_info,
-                            algorithms):
+    def best_fit_topology_n(self, degrees, weights, types, node_ref_number, add_prefix, extra_node_info, algorithms,
+                            type_sel=nc.ASSIGN_BY_RANDOM):
         topo, distances, assigned_types, pos, colors = None, None, None, None, None
 
         ref_mape = 1000
@@ -546,7 +555,7 @@ class MetroGenApp:
                 # Generate the network using the predefined parameters.
                 topo, distances, assigned_types, pos, colors = \
                     self.metro_gen.generate_mesh(degrees, weights, self.upper_limits, types, self.color_codes,
-                                                 algorithm, node_ref_number, add_prefix, extra_node_info)
+                                                 algorithm, node_ref_number, add_prefix, extra_node_info, type_sel=type_sel)
 
                 # Calculate weights from requested proportions and regenerate distances optimizing the
                 # mean error
