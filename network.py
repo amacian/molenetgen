@@ -379,16 +379,22 @@ def gen_waxman_paven_topology(nodes, regions, beta=0.4, alpha=0.4,
     # Instead of defining a global area and calculating area, rows and columns per region
     # a factor (a squared integer) is used to define the area of each region and the
     # total area
-    region_area = rows * columns * squared_factor
-    total_area = region_area * actual_regions
+    while True:
+        region_area = rows * columns * squared_factor
+        total_area = region_area * actual_regions
+        # Instead of receiving the minimum distance between nodes, we calculate it based on a
+        # dist_factor parameter and the area available per node
+        # minimum distance^2 must be lower than total_area/nodes
+        dist_min = math.floor(math.sqrt(total_area / nodes) * dist_factor)
+        if dist_min > 0:
+            break
+        # We need to increase the total area
+        squared_factor = (math.sqrt(squared_factor)+1)**2
     # Rows and columns for the regions are calculated based on the columns and the squared factor
     region_rows = int(columns * math.sqrt(squared_factor))
     region_columns = int(rows * math.sqrt(squared_factor))
 
-    # Instead of receiving the minimum distance between nodes, we calculate it based on a
-    # dist_factor parameter and the area available per node
-    # minimum distance^2 must be lower than total_area/nodes
-    dist_min = math.floor(math.sqrt(total_area / nodes) * dist_factor)
+
     # Maximum number of nodes per region
     max_nodes_region = math.floor(region_area / (dist_min ** 2))
     # A too high value would make the process too unbalanced
@@ -893,21 +899,8 @@ def assign_betweenness_types(topo, types, proportions):
     bw_priority = nc.BETWEENNESS_PRIORITY + [t for t in undefined_types]
     total_weight = sum(proportions)
     n_nodes = len(topo.nodes)
-    type_counts = {
-        t: int(round((w / total_weight) * n_nodes))
-        for t, w in zip(types, proportions)
-    }
-    # Step 2: Adjust for rounding error (optional)
-    # Ensure total assigned = total nodes
-    assigned_total = sum(type_counts.values())
-    difference = n_nodes - assigned_total
-    if difference != 0:
-        sorted_types = sorted(type_counts.items(), key=lambda x: -x[1])
-        for t, _ in sorted_types:
-            if difference == 0:
-                break
-            type_counts[t] += 1 if difference > 0 else -1
-            difference += -1 if difference > 0 else 1
+
+    type_counts = calculate_actual_values_per_type(n_nodes, types, proportions)
 
     centrality = nx.betweenness_centrality(topo)
     sorted_nodes = sorted(centrality.items(), key=lambda item: item[1], reverse=True)
@@ -930,6 +923,25 @@ def assign_degree_num_types(topo, types, proportions):
     bw_priority = nc.BETWEENNESS_PRIORITY + [t for t in undefined_types]
     total_weight = sum(proportions)
     n_nodes = len(topo.nodes)
+
+    type_counts = calculate_actual_values_per_type(n_nodes, types, proportions)
+
+    sorted_nodes = sorted(topo.degree, key=lambda item: item[1], reverse=True)
+    node_ids = [node for node, _ in sorted_nodes]
+
+    assigned_types = {}
+    start = 0
+    for node_type, count in type_counts.items():
+        for node in node_ids[start:start + count]:
+            assigned_types[node] = node_type
+        start += count
+
+    types_list = [assigned_types[node] for node in sorted(topo.nodes())]
+
+    return types_list
+
+def calculate_actual_values_per_type(n_nodes, types, proportions):
+    total_weight = sum(proportions)
     type_counts = {
         t: int(round((w / total_weight) * n_nodes))
         for t, w in zip(types, proportions)
@@ -946,16 +958,4 @@ def assign_degree_num_types(topo, types, proportions):
             type_counts[t] += 1 if difference > 0 else -1
             difference += -1 if difference > 0 else 1
 
-    sorted_nodes = sorted(topo.degree, key=lambda item: item[1], reverse=True)
-    node_ids = [node for node, _ in sorted_nodes]
-
-    assigned_types = {}
-    start = 0
-    for node_type, count in type_counts.items():
-        for node in node_ids[start:start + count]:
-            assigned_types[node] = node_type
-        start += count
-
-    types_list = [assigned_types[node] for node in sorted(topo.nodes())]
-
-    return types_list
+    return type_counts

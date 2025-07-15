@@ -34,8 +34,8 @@ class BackboneGenApp:
     # types - dataframe with office codes (e.g. RCO) and proportions
     # dict_colors - dictionary that maps types to colors for the basic graph
     # iterations_distance - number of topologies to generate to get the best fit for the distances
-    def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types,
-                 dict_colors={}, iterations_distance=nc.ITERATIONS_FOR_DISTANCE, bounds=0.05):
+    def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types, dict_colors={},
+                 iterations_distance=nc.ITERATIONS_FOR_DISTANCE, bounds=0.05, regions=12):
         # Store the distance ranges, the requested proportions and the max distance value
         self.upper_limits = upper_limits
         self.req_distance_props = distance_range_props
@@ -75,6 +75,7 @@ class BackboneGenApp:
         # Variable to hold the assigned clusters
         self.clusters = None
 
+        self.regions = regions
         # Create a notebook for the tabs
         notebook = ttk.Notebook(self.root, name="notebook_gen")
 
@@ -310,7 +311,7 @@ class BackboneGenApp:
             self.back_gen = DualBackboneGenerator()
             generators.append(self.back_gen)
         elif generator == nc.REGION_GEN:
-            self.back_gen = WaxmanPavenGenerator()
+            self.back_gen = WaxmanPavenGenerator(regions=self.regions)
             generators.append(self.back_gen)
         elif generator == nc.DEFAULT_GEN:
             self.back_gen = DefaultBackboneGenerator()

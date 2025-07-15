@@ -5,7 +5,7 @@ import networkx as nx
 from pandas import DataFrame
 from numpy import average
 from network import (gen_topology, calculate_edge_distances, rename_nodes, color_nodes, gen_waxman_paven_topology,
-                     assign_betweenness_types, assign_degree_num_types)
+                     assign_betweenness_types, assign_degree_num_types, calculate_actual_values_per_type)
 
 
 class BackboneGenerator(ABC):
@@ -61,7 +61,7 @@ class DefaultBackboneGenerator(BackboneGenerator):
             case _:
                 assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
 
-       # Modify the node labels to name them as a combination of the type and an index
+        # Modify the node labels to name them as a combination of the type and an index
         name_nodes = rename_nodes(assigned_types, types)
         topo = nx.relabel_nodes(topo, dict(zip(topo.nodes, name_nodes)))
 
@@ -107,10 +107,14 @@ class DualBackboneGenerator(BackboneGenerator):
         node_sheet = nc.NODES_EXCEL_NAME
         link_sheet = nc.LINKS_EXCEL_NAME
 
+        nodes_per_type = calculate_actual_values_per_type(nodes, types.code, types.proportion)
+        nodes_per_type = [int(round(elements)/2) if code != nc.TRANSIT_CODE else elements for code, elements in nodes_per_type.items() ]
+        transit_nodes = int(types.proportion[types.code == nc.TRANSIT_CODE].iloc[0]/sum(types.proportion) * nodes)
+        non_transit = nodes - transit_nodes
         # Repeat
         while True:
             # Call the function to generate the topology using half of the nodes with double degree number
-            topo = gen_topology([(i * 2) - 2 for i in degrees], weights, int(nodes / 2))
+            topo = gen_topology([(i * 2) - 2 for i in degrees], weights, int(non_transit / 2) + transit_nodes)
             # Check for node survivability
             if not nx.is_connected(topo) or len(nx.minimum_node_cut(topo)) < 2:
                 continue
@@ -132,12 +136,11 @@ class DualBackboneGenerator(BackboneGenerator):
         assigned_types = None
         match type_assign:
             case nc.ASSIGN_BY_BETWEEN:
-                assigned_types = assign_betweenness_types(topo, types.code, types.proportion)
+                assigned_types = assign_betweenness_types(topo, types.code, nodes_per_type)
             case nc.ASSIGN_BY_DEGREE:
-                assigned_types = assign_degree_num_types(topo, types.code, types.proportion)
+                assigned_types = assign_degree_num_types(topo, types.code, nodes_per_type)
             case _:
-                assigned_types = random.choices(types.code, weights=types.proportion, k=len(topo.nodes))
-
+                assigned_types = random.choices(types.code, weights=nodes_per_type, k=len(topo.nodes))
 
         # Modify the node labels to name them as a combination of the type and an index
         name_nodes = rename_nodes(assigned_types, types)
