@@ -1,3 +1,5 @@
+import copy
+
 import matplotlib
 import networkx as nx
 import numpy as np
@@ -162,8 +164,20 @@ class BackboneGenApp:
         canvas_widget = canvas.get_tk_widget()
 
         canvas_widget.grid(row=0, rowspan=7, column=0, sticky=tk.W + tk.N)
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=self.colors,
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
 
         btn_set_distances = tk.Button(frame, text="Change \ndistances", command=self.open_dist_window)
         btn_set_distances.grid(row=0, column=1, sticky=tk.N)
@@ -393,8 +407,20 @@ class BackboneGenApp:
         color_map = plt.cm.rainbow
         norm = matplotlib.colors.Normalize(vmin=0, vmax=max(self.clusters))
         # Draw the result
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=color_map(norm(self.clusters)), ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=color_map(norm(self.clusters)), ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=color_map(norm(self.clusters)),
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
 
         # We might want to include some descriotion in the future
         label['text'] = ""  # format_groups(groups)
@@ -462,8 +488,20 @@ class BackboneGenApp:
         # Add the Tkinter canvas to the window
         canvas_widget.grid(row=0, column=0, rowspan=7, sticky=tk.W + tk.N)
         # Draw the figure
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=self.colors,
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
         # Retrieve the reference to the label where distance ranges and proportions are drawn
         output_label = frame.nametowidget("print_distances")
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]

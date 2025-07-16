@@ -1,3 +1,5 @@
+import copy
+
 import networkx as nx
 import numpy as np
 from matplotlib import pyplot as plt
@@ -270,8 +272,20 @@ class MetroGenApp:
         # canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.E + tk.N + tk.S)
         canvas_widget.grid(row=0, rowspan=3, column=0, sticky=tk.W + tk.N)
         # print(self.colors)
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=self.colors,
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
 
         btn_set_distances = tk.Button(frame, text="Change \ndistances", command=self.open_dist_window)
         btn_set_distances.grid(row=0, column=1, sticky=tk.N)
@@ -684,8 +698,20 @@ class MetroGenApp:
         # Add the Tkinter canvas to the window
         canvas_widget.grid(row=0, column=0, rowspan=7, sticky=tk.W + tk.N)
         # Draw the figure
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=self.colors,
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
         # Retrieve the reference to the label where distance ranges and proportions are drawn
         output_label = frame.nametowidget("print_distances")
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]

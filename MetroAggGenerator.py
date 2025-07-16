@@ -58,7 +58,7 @@ class DefaultMetroAggGenerator(MetroAggGenerator):
             positions.append(total_length)
             # Calculate distances based on positions
             distances = [round(positions[i + 1] - positions[i], 2) for i in range(len(positions) - 1)]
-            if not any(distance > limit_lengths_link[1] or distance < limit_lengths_link[0]
+            if limit_lengths_link is None or not any(distance > limit_lengths_link[1] or distance < limit_lengths_link[0]
                        for distance in distances):
                 break
             distances = []
