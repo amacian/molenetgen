@@ -1,3 +1,5 @@
+import copy
+
 import networkx as nx
 from matplotlib import pyplot as plt
 import tkinter as tk
@@ -292,9 +294,20 @@ class MetroAggGenApp:
         canvas_widget.grid(row=0, column=0, sticky=tk.W + tk.N)
 
         # Draw the figure
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=self.colors,
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
 
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.01  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=14, font_weight='bold')
     # find and remove the group_tab figure canvas
     def remove_old_group_figure_canvas(self):
         # Get the frame of the group tab

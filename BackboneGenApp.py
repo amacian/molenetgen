@@ -1,3 +1,5 @@
+import copy
+
 import matplotlib
 import networkx as nx
 import numpy as np
@@ -34,8 +36,8 @@ class BackboneGenApp:
     # types - dataframe with office codes (e.g. RCO) and proportions
     # dict_colors - dictionary that maps types to colors for the basic graph
     # iterations_distance - number of topologies to generate to get the best fit for the distances
-    def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types,
-                 dict_colors={}, iterations_distance=nc.ITERATIONS_FOR_DISTANCE, bounds=0.05):
+    def __init__(self, degrees, weights, nodes, upper_limits, distance_range_props, types, dict_colors={},
+                 iterations_distance=nc.ITERATIONS_FOR_DISTANCE, bounds=0.05, regions=12):
         # Store the distance ranges, the requested proportions and the max distance value
         self.upper_limits = upper_limits
         self.req_distance_props = distance_range_props
@@ -75,6 +77,7 @@ class BackboneGenApp:
         # Variable to hold the assigned clusters
         self.clusters = None
 
+        self.regions = regions
         # Create a notebook for the tabs
         notebook = ttk.Notebook(self.root, name="notebook_gen")
 
@@ -161,8 +164,20 @@ class BackboneGenApp:
         canvas_widget = canvas.get_tk_widget()
 
         canvas_widget.grid(row=0, rowspan=7, column=0, sticky=tk.W + tk.N)
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=self.colors,
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
 
         btn_set_distances = tk.Button(frame, text="Change \ndistances", command=self.open_dist_window)
         btn_set_distances.grid(row=0, column=1, sticky=tk.N)
@@ -250,6 +265,13 @@ class BackboneGenApp:
         combo_gen.current(0)
         label_gen.grid(row=(20 + initial_row), column=0, pady=5)
         combo_gen.grid(row=(20 + initial_row), column=1, pady=5)
+
+        label_type = tk.Label(frame, text="Assign type by:")
+        combo_type = ttk.Combobox(frame, name="type_sel", state="readonly",
+                                  values=[nc.ASSIGN_BY_RANDOM, nc.ASSIGN_BY_DEGREE, nc.ASSIGN_BY_BETWEEN])
+        combo_type.current(0)
+        label_type.grid(row=(21 + initial_row), column=0, pady=5)
+        combo_type.grid(row=(21 + initial_row), column=1, pady=5)
         return frame, degree_list, type_list
 
     def create_tab_grouping(self, parent, frame_name):
@@ -303,7 +325,7 @@ class BackboneGenApp:
             self.back_gen = DualBackboneGenerator()
             generators.append(self.back_gen)
         elif generator == nc.REGION_GEN:
-            self.back_gen = WaxmanPavenGenerator()
+            self.back_gen = WaxmanPavenGenerator(regions=self.regions)
             generators.append(self.back_gen)
         elif generator == nc.DEFAULT_GEN:
             self.back_gen = DefaultBackboneGenerator()
@@ -330,9 +352,10 @@ class BackboneGenApp:
         except ValueError:
             print("Error in number of nodes, using default: ", nodes)
 
+        type_sel = self.root.nametowidget("notebook_gen.params.type_sel").get()
         # Call the backbone function with the expected parameters
         self.best_fit_topology_n(degrees, weights, nodes, types, self.color_codes,
-                                 algorithm_sel, generators)
+                                 algorithm_sel, generators, type_sel=type_sel)
 
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
         self.distances = optimize_distance_ranges(self.upper_limits, req_weights, self.distances)
@@ -384,8 +407,20 @@ class BackboneGenApp:
         color_map = plt.cm.rainbow
         norm = matplotlib.colors.Normalize(vmin=0, vmax=max(self.clusters))
         # Draw the result
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=color_map(norm(self.clusters)), ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=color_map(norm(self.clusters)), ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=color_map(norm(self.clusters)),
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
 
         # We might want to include some descriotion in the future
         label['text'] = ""  # format_groups(groups)
@@ -453,8 +488,20 @@ class BackboneGenApp:
         # Add the Tkinter canvas to the window
         canvas_widget.grid(row=0, column=0, rowspan=7, sticky=tk.W + tk.N)
         # Draw the figure
-        nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
-                node_color=self.colors, ax=ax)
+        #nx.draw(self.topo, pos=self.pos, with_labels=True, font_weight='bold',
+        #        node_color=self.colors, ax=ax)
+        nx.draw_networkx_nodes(self.topo, pos=self.pos, node_color=self.colors,
+                               node_size=300, edgecolors='black', linewidths=0.5, ax=ax)
+        nx.draw_networkx_edges(self.topo, pos=self.pos, ax=ax, width=1.0, alpha=0.6)
+
+        label_pos = copy.deepcopy(self.pos)
+        y_offset = 0.04  # Tune this factor if needed
+        for k in label_pos:
+            label_pos[k] = (label_pos[k][0], label_pos[k][1] + y_offset)
+
+        # Draw labels above nodes
+        nx.draw_networkx_labels(self.topo, pos=label_pos, ax=ax,
+                                font_size=8, font_weight='bold')
         # Retrieve the reference to the label where distance ranges and proportions are drawn
         output_label = frame.nametowidget("print_distances")
         req_weights = [i / sum(self.req_distance_props) for i in self.req_distance_props]
@@ -549,7 +596,7 @@ class BackboneGenApp:
         output_label['text'] = format_distance_limits(self.distances, self.upper_limits, req_weights)
 
     def best_fit_topology_n(self, degrees, weights, nodes, types, dict_colors,
-                            algorithms, generators=None):
+                            algorithms, generators=None, type_sel=nc.ASSIGN_BY_RANDOM):
         algorithm = algorithms[0]
         if generators is None:
             generators = [self.back_gen]
@@ -567,11 +614,9 @@ class BackboneGenApp:
                     # the position of the nodes and the assigned colors
                     aux_topo, aux_distances, aux_assigned_types, \
                         aux_node_sheet, aux_link_sheet, \
-                        aux_pos, aux_colors = generator.generate(degrees, weights, nodes,
-                                                                 self.upper_limits, types,
-                                                                 algo=algorithm,
-                                                                 dict_colors=dict_colors,
-                                                                 max_distance=self.max_upper)
+                        aux_pos, aux_colors = generator.generate(degrees, weights, nodes, self.upper_limits, types,
+                                                                 algo=algorithm, dict_colors=dict_colors,
+                                                                 max_distance=self.max_upper, type_assign=type_sel)
 
                     # Calculate weights from requested proportions and regenerate distances optimizing the
                     # mean error

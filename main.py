@@ -27,7 +27,8 @@ if __name__ == '__main__':
         nc.NATIONAL_CO_CODE: 'g',
         nc.REGIONAL_CO_CODE: 'r',
         nc.REGIONAL_NONHUB_CO_CODE: 'y',
-        nc.LOCAL_CO_CODE: 'o'
+        nc.LOCAL_CO_CODE: 'o',
+        nc.TRANSIT_CODE: 'y'
     }
 
     # Topologies to create in order to get the best one and approximate to the requested distances
